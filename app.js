@@ -277,7 +277,7 @@ function renderWorkout() {
               <div class="ex-detail">${e.Series_Obj||3} series${getLastRef(e.Ejercicio)}</div>
             </div>
             <div class="ex-type-badge">${e.Tipo}</div>
-            <div class="ex-check ${isDone?'done'}">${isDone?'✓':'→'}</div>
+            <div class="ex-check ${isDone?"done":""}">${isDone?"✓":"→"}</div>
           </div>
         </div>`;
     } else {
@@ -292,7 +292,7 @@ function renderWorkout() {
               <div class="group-ex-name">${e.Ejercicio}</div>
               <div class="group-ex-detail">${e.Series_Obj||3} series${getLastRef(e.Ejercicio)}</div>
             </div>
-            <div class="ex-check ${isDone?'done'}">${isDone?'✓':'→'}</div>
+            <div class="ex-check ${isDone?"done":""}">${isDone?"✓":"→"}</div>
           </div>`;
       }).join('');
       return `
