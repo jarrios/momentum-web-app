@@ -1,10 +1,13 @@
-// Momentum Training — Service Worker
-const CACHE = 'momentum-v2';
+// Momentum Training — Service Worker v3
+const CACHE = 'momentum-v3';
+
+// config.js NUNCA se cachea — siempre se lee de la red
+const ALWAYS_NETWORK = ['config.js'];
+
 const ASSETS = [
   './', './index.html', './style.css',
-  './config.js', './storage.js', './sheets.js', './app.js',
+  './storage.js', './sheets.js', './app.js',
   './manifest.json', './icon-192.png', './icon-512.png',
-  'https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&display=swap'
 ];
 
 self.addEventListener('install', e => {
@@ -14,17 +17,28 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))
+    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
   ));
   self.clients.claim();
 });
 
 self.addEventListener('fetch', e => {
-  if (e.request.url.includes('sheets.googleapis.com') ||
-      e.request.url.includes('script.google.com') ||
-      e.request.url.includes('youtube.com')) {
-    e.respondWith(fetch(e.request).catch(() => new Response('{}', {headers:{'Content-Type':'application/json'}})));
+  const url = e.request.url;
+  const isExternal = url.includes('sheets.googleapis.com') ||
+                     url.includes('script.google.com') ||
+                     url.includes('youtube.com');
+  const isNoCache = ALWAYS_NETWORK.some(f => url.includes(f));
+
+  if (isExternal || isNoCache) {
+    e.respondWith(
+      fetch(e.request).catch(() =>
+        new Response('{}', { headers: { 'Content-Type': 'application/json' } })
+      )
+    );
     return;
   }
-  e.respondWith(caches.match(e.request).then(cached => cached || fetch(e.request)));
+
+  e.respondWith(
+    caches.match(e.request).then(cached => cached || fetch(e.request))
+  );
 });
