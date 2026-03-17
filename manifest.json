@@ -1,14 +1,17 @@
 {
   "name": "Momentum Training",
   "short_name": "Momentum",
-  "description": "App de entrenamiento personal",
-  "start_url": "/",
+  "description": "App de entrenamiento personal — Estándar y Kettlebell",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#0a0a0f",
-  "theme_color": "#0a0a0f",
+  "background_color": "#0d0d0d",
+  "theme_color": "#0d0d0d",
   "orientation": "portrait",
+  "lang": "es",
+  "categories": ["fitness", "health", "sports"],
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }
