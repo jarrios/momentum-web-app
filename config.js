@@ -5,7 +5,7 @@
 const CONFIG = {
   // Google Sheets
   SHEET_ID: '1Riz_9M7BZzKc-S78xLrVG98uMzSIhn95Dvrjq85W_A8',
-  API_KEY: 'TU_API_KEY_AQUI',           // <-- pega tu API Key aquí
+  API_KEY: 'AIzaSyCg6qC834cKz7YrG0ZuAIeCPzTwDdNWcn8',           // <-- pega tu API Key aquí
   APPS_SCRIPT_URL: 'TU_APPS_SCRIPT_URL', // <-- pega la URL de Apps Script aquí
 
   SHEETS: {
