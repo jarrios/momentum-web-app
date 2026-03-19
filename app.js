@@ -151,19 +151,13 @@ function renderHome(){
   const exsDia=nextInfo?State.plantillas.filter(p=>p.Programa===nextInfo.prog&&Number(p.Semana)===nextInfo.semana&&Number(p.Dia)===nextInfo.dia):[];
   const exCount=exsDia.filter(e=>e.Tipo!=='Calentamiento').length;
   const mats=getMaterialDia(exsDia);
-  // Si no hay siguiente, sugerir el día 1 semana 1 igualmente (modo libre)
-  if(!nextInfo && State.programa) {
-    const prog=State.programa;
-    const sems=getSemanasPrograma(prog);
-    if(sems.length) nextInfo={semana:sems[0],dia:1,prog};
-  }
   const heroContent=nextInfo
-    ?`<div class="hero-lbl">Sesión recomendada · Semana ${nextInfo.semana}</div>
+    ?`<div class="hero-lbl">Sesión de hoy · Semana ${nextInfo.semana}</div>
       <div class="hero-name">${nextInfo.prog.toUpperCase()}<br>S${nextInfo.semana}D${nextInfo.dia}</div>
       <div class="hero-pills"><div class="hero-pill">⚡ ${exCount} ejercicios</div><div class="hero-pill">⏱ ~45 min</div>${mats.map(m=>`<div class="hero-pill">${m.emoji||''} ${m.label}</div>`).join('')}</div>
       <div class="hero-rival">La última vez: <strong>${calcTotalUltima(nextInfo.prog,nextInfo.semana,nextInfo.dia)} reps</strong></div>
       <button class="hero-btn" onclick="openOverview('${nextInfo.prog}',${nextInfo.semana},${nextInfo.dia})">⚡ EMPEZAR HOY</button>`
-    :`<div class="hero-name">SIN<br>PROGRAMA</div><div class="hero-rival">Comprueba la conexión con Sheets</div>`;
+    :`<div class="hero-name">¡PROGRAMA<br>COMPLETADO!</div><div class="hero-rival">Lo has dado todo 🏆</div>`;
 
   return`${geoBg()}
     <div class="home-scroll" style="position:relative;z-index:1">
@@ -223,7 +217,7 @@ function renderDays(){
     const exNoCal=exs.filter(e=>e.Tipo!=='Calentamiento');
     const ssG=[...new Set(exs.filter(e=>e.Tipo==='Superset').map(e=>e.Grupo_Superset))];
     const mats=getMaterialDia(exs);
-    return`<div class="day-card ${isDone?'completed':''} ${isNext?'next-up':''}" onclick="openOverview('${prog}',${sem},${d})">
+    return`<div class="day-card ${isDone?'completed':''} ${isNext?'next-up':''}" onclick="${isDone?'':(`openOverview('${prog}',${sem},${d})`)}">
       ${isNext?'<div class="day-next-badge">SIGUIENTE</div>':''}
       <div class="day-card-num">Sesión ${d}</div>
       <div class="day-card-name">${prog.toUpperCase()} S${sem}D${d}</div>
