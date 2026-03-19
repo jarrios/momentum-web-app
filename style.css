@@ -103,7 +103,7 @@ html,body{height:100%;overflow:hidden;font-family:'Outfit',sans-serif;color:#fff
 .day-card{padding:15px 16px;border-radius:20px;margin-bottom:10px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);cursor:pointer;position:relative;overflow:hidden;transition:all .15s}
 .day-card:active{transform:scale(.99)}
 .day-card.next-up{border-color:rgba(245,200,0,0.35)}
-.day-card.completed{opacity:0.55}
+.day-card.completed{opacity:0.5;cursor:default}
 .day-next-badge{position:absolute;top:13px;right:13px;font-size:9px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#111;background:var(--yellow);padding:4px 10px;border-radius:20px}
 .day-card-num{font-size:11px;color:var(--t3);font-weight:800;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px}
 .day-card-name{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;letter-spacing:.02em;margin-bottom:10px}
