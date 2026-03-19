@@ -1,1267 +1,558 @@
 // ============================================
-// MOMENTUM TRAINING — app.js
+// MOMENTUM TRAINING — app.js v3
+// Diseño motivacional azul + Google Sheets
 // ============================================
 
-// ---- ESTADO GLOBAL ----
+function getEmoji(nombre) {
+  if (!nombre) return '⚡';
+  const n = nombre.toLowerCase();
+  if (n.includes('calentamiento')) return '🔥';
+  if (n.includes('flexion')||n.includes('flexión')||n.includes('push')) return '💪';
+  if (n.includes('sentadilla')||n.includes('squat')||n.includes('split')) return '🦵';
+  if (n.includes('desplante')||n.includes('lunge')||n.includes('zancada')) return '🏃';
+  if (n.includes('plancha')||n.includes('plank')||n.includes('toque')) return '🧘';
+  if (n.includes('remo')||n.includes('row')) return '🚣';
+  if (n.includes('swing')||n.includes('kettlebell')) return '🏋️';
+  if (n.includes('step')) return '⬆️';
+  if (n.includes('sit')||n.includes('abdom')||n.includes('crunch')) return '🤸';
+  if (n.includes('burpee')) return '🔥';
+  return '⚡';
+}
+
 const State = {
-  screen: 'home',
-  programa: null,
-  semana: null,
-  dia: null,
-  plantillas: [],
-  sesiones: [],
-  ejerciciosAll: [],
-  sesionActiva: null,
-  ejerciciosActivos: [],
-  currentExIdx: 0,
-  seriesRegistradas: [],
-  calYear: new Date().getFullYear(),
-  calMonth: new Date().getMonth(),
+  screen:'home', programa:null, semana:null, dia:null,
+  plantillas:[], sesiones:[], ejerciciosAll:[],
+  sesionActiva:null, seriesRegistradas:[],
+  ejerciciosDia:[], currentExIdx:0, currentSerie:0, currentReps:0,
+  calYear:new Date().getFullYear(), calMonth:new Date().getMonth(),
 };
 
-// ---- UTILS ----
-function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
-function pad(n) { return String(n).padStart(2,'0'); }
-function nowStr() {
-  const d = new Date();
-  return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-function getTime() {
-  const d = new Date();
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+function pad(n){return String(n).padStart(2,'0')}
+function nowStr(){const d=new Date();return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`}
+function getTime(){const d=new Date();return `${pad(d.getHours())}:${pad(d.getMinutes())}`}
 
-// ---- TOAST / SAVED ----
-let toastTimer, savedTimer;
-function showToast(msg, type='') {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast' + (type ? ' '+type : '') + ' show';
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.className = 'toast', 2500);
+let _toastT,_savedT;
+function showToast(msg,type=''){
+  const t=document.getElementById('toast');if(!t)return;
+  t.textContent=msg;t.className='toast'+(type?' '+type:'')+' show';
+  clearTimeout(_toastT);_toastT=setTimeout(()=>t.className='toast',2500);
 }
-function showSaved() {
-  const b = document.getElementById('saved-badge');
-  b.classList.add('show');
-  clearTimeout(savedTimer);
-  savedTimer = setTimeout(() => b.classList.remove('show'), 1500);
+function showSaved(){
+  const b=document.getElementById('saved-badge');if(!b)return;
+  b.classList.add('show');clearTimeout(_savedT);_savedT=setTimeout(()=>b.classList.remove('show'),1500);
 }
 
-// ---- NAVEGACIÓN ----
-function goTo(screenId, push=true) {
-  const prev = document.querySelector('.screen.active');
-  if (prev) {
-    prev.classList.add('slide-back');
-    setTimeout(() => { prev.classList.remove('active','slide-back'); }, 280);
-  }
-  State.screen = screenId;
-  renderScreen(screenId);
-}
-
-function goBack(screenId) {
-  const prev = document.querySelector('.screen.active');
-  if (prev) {
-    prev.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
-    prev.style.opacity = '0';
-    prev.style.transform = 'translateX(24px)';
-    setTimeout(() => { prev.classList.remove('active'); prev.style = ''; }, 220);
-  }
-  State.screen = screenId;
-  renderScreen(screenId);
-}
-
-// ---- RENDER ----
-function renderScreen(id) {
-  const app = document.getElementById('app');
-  const div = document.createElement('div');
-  div.className = 'screen';
-  div.id = 'sc-' + id;
-
-  const screens = {
-    home:      renderHome,
-    weeks:     renderWeeks,
-    days:      renderDays,
-    calent:    renderCalent,
-    exercise:  renderExercise,
-    summary:   renderSummary,
-    history:   renderHistory,
-  };
-
-  const fn = screens[id];
-  if (!fn) { showToast('Pantalla no encontrada', 'error'); return; }
-  div.innerHTML = fn();
+function renderAndShow(id){
+  const app=document.getElementById('app');
+  const old=document.getElementById('sc-'+id);if(old)old.remove();
+  const div=document.createElement('div');
+  div.className='screen';div.id='sc-'+id;
+  const fns={home:renderHome,weeks:renderWeeks,days:renderDays,overview:renderOverview,prep:renderPrep,exercise:renderExercise,summary:renderSummary,history:renderHistory};
+  div.innerHTML=(fns[id]||(()=>'<div class="loading"><div class="load-txt">Pantalla no encontrada</div></div>'))();
   app.appendChild(div);
-  requestAnimationFrame(() => div.classList.add('active'));
-  setTimeout(() => app.querySelectorAll('.screen:not(.active)').forEach(s => s.remove()), 400);
-
-  attachEvents(id, div);
-  restoreNotes(div);
-  updateClock(div);
+  requestAnimationFrame(()=>{
+    document.querySelectorAll('#app .screen').forEach(s=>s.classList.remove('active'));
+    div.classList.add('active');
+  });
+  setTimeout(()=>app.querySelectorAll('.screen:not(.active)').forEach(s=>s.remove()),400);
+  if(id==='prep')setTimeout(startCd,200);
 }
 
-// ---- HOME ----
-function renderHome() {
-  const sesiones = State.sesiones;
-  const ultimaSesion = sesiones.length ? sesiones[sesiones.length-1] : null;
+function geoBg(){
+  return `<div class="geo">
+    <div class="gc" style="width:180px;height:180px;top:-70px;right:-60px"></div>
+    <div class="gc" style="width:100px;height:100px;bottom:120px;left:-40px;border-color:rgba(245,200,0,.1)"></div>
+    <div class="gc" style="width:70px;height:70px;top:38%;right:18px;border-color:rgba(255,255,255,.04)"></div>
+    <div class="gd" style="width:10px;height:10px;top:28%;left:28px;background:rgba(245,200,0,.3)"></div>
+    <div class="gd" style="width:7px;height:7px;top:18%;right:70px;background:rgba(255,255,255,.2)"></div>
+  </div>`;
+}
 
-  // Siguiente sesión
-  let nextTag = 'Sin sesiones pendientes';
-  let nextName = 'EMPIEZA<br>HOY';
-  let nextMeta = 'Elige un programa para comenzar';
-  let nextSesionId = null;
+function getEjerciciosDia(){
+  if(!State.programa||!State.semana||!State.dia)return[];
+  return State.plantillas.filter(p=>p.Programa===State.programa&&Number(p.Semana)===State.semana&&Number(p.Dia)===State.dia).sort((a,b)=>Number(a.Orden)-Number(b.Orden));
+}
+function getUltimaVez(nombre){
+  return State.ejerciciosAll.filter(e=>e.Ejercicio===nombre&&e.Reps).sort((a,b)=>(b.EjercicioID||'').localeCompare(a.EjercicioID||''))[0]||null;
+}
+function getSemanasPrograma(prog){
+  return[...new Set(State.plantillas.filter(p=>p.Programa===prog).map(p=>Number(p.Semana)))].sort((a,b)=>a-b);
+}
+function getSesionesPrograma(prog){return State.sesiones.filter(s=>s.Programa===prog).length}
+function getProgresoPrograma(prog){
+  const sems=getSemanasPrograma(prog);
+  const hechas=[...new Set(State.sesiones.filter(s=>s.Programa===prog).map(s=>Number(s.Semana)))];
+  return sems.length?`S${hechas.length||1}/${sems.length}`:'—';
+}
+function getMaterialDia(exs){
+  const hasBanda=exs.some(e=>e.Equipo==='Banda'),hasKB=exs.some(e=>e.Equipo==='Kettlebell');
+  const items=[];
+  if(hasBanda)items.push({dot:'#FF3B30',label:'Bandas elásticas'});
+  if(hasKB)items.push({emoji:'🏋️',label:'Kettlebell'});
+  if(!hasBanda&&!hasKB)items.push({emoji:'🏃',label:'Peso corporal'});
+  return items;
+}
+function calcRacha(){
+  const dates=State.sesiones.map(s=>{const p=(s.Fecha_Inicio||'').split(/[\/,\s]+/);if(p.length>=3)return new Date(p[2],p[1]-1,p[0]).toDateString();return null;}).filter(Boolean);
+  const unique=[...new Set(dates)].map(d=>new Date(d)).sort((a,b)=>b-a);
+  let r=0;const today=new Date();today.setHours(0,0,0,0);
+  for(let i=0;i<unique.length;i++){const d=new Date(unique[i]);d.setHours(0,0,0,0);const diff=Math.round((today-d)/(1000*60*60*24));if(diff===i||diff===i+1)r++;else break;}
+  return r;
+}
+function calcTotalUltima(prog,semana,dia){
+  const ses=State.sesiones.filter(s=>s.Programa===prog&&Number(s.Semana)===semana&&Number(s.Dia)===dia);
+  if(!ses.length)return'—';
+  const last=ses[ses.length-1];
+  const exs=State.ejerciciosAll.filter(e=>e.SesionID===last.SesionID);
+  return exs.reduce((t,e)=>t+Number(e.Reps||0),0)||'—';
+}
+function renderWeekDots(){
+  const hoy=new Date();hoy.setHours(0,0,0,0);
+  const lunes=new Date(hoy);lunes.setDate(hoy.getDate()-((hoy.getDay()+6)%7));
+  return['L','M','X','J','V','S','D'].map((d,i)=>{
+    const fecha=new Date(lunes);fecha.setDate(lunes.getDate()+i);
+    const isHoy=fecha.toDateString()===hoy.toDateString();
+    const hasSes=State.sesiones.some(s=>{const p=(s.Fecha_Inicio||'').split(/[\/,\s]+/);if(p.length>=3){const sd=new Date(p[2],p[1]-1,p[0]);return sd.toDateString()===fecha.toDateString();}return false;});
+    const cls=hasSes?'done':isHoy?'today':'';
+    return`<div class="day ${isHoy?'today':''}"><div class="day-c ${cls}">${hasSes?'✓':fecha.getDate()}</div><div class="day-n">${d}</div></div>`;
+  }).join('');
+}
+function renderProgCards(){
+  const progs=[...new Set(State.plantillas.map(p=>p.Programa))];
+  return progs.map(prog=>{
+    const sems=getSemanasPrograma(prog);
+    const isKB=prog.toLowerCase().includes('kettle')||prog.toLowerCase().includes('kb');
+    const color=isKB?'#FF3A5C':'#F5C800';
+    return`<div style="margin:0 18px 10px;padding:16px 18px;border-radius:20px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);cursor:pointer;border-left:3px solid ${color}" onclick="State.programa='${prog}';renderAndShow('weeks')">
+      <div style="font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:${color};margin-bottom:6px">● ${getSesionesPrograma(prog)} sesiones completadas</div>
+      <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;margin-bottom:4px">${prog.toUpperCase()}</div>
+      <div style="font-size:13px;color:var(--t2)">${isKB?'Kettlebells · Bandas · Corporal':'Peso corporal · Bandas elásticas'}</div>
+      <div style="display:flex;gap:20px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08)">
+        <div><div style="font-family:'Syne',sans-serif;font-size:22px;color:${color}">${sems.length}</div><div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.1em;font-weight:700">Semanas</div></div>
+        <div><div style="font-family:'Syne',sans-serif;font-size:22px;color:${color}">4</div><div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.1em;font-weight:700">Días/sem</div></div>
+        <div><div style="font-family:'Syne',sans-serif;font-size:22px;color:${color}">${getProgresoPrograma(prog)}</div><div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.1em;font-weight:700">Progreso</div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
 
-  if (State.plantillas.length) {
-    const prog = 'Estándar';
-    const sesDone = sesiones.filter(s => s.Programa === prog);
-    const all = getPlantillasSorted(prog);
-    const nextIdx = sesDone.length % all.length;
-    const next = all[nextIdx];
-    if (next) {
-      nextTag = `Siguiente sesión · ${prog}`;
-      nextName = `SESIÓN ${next.dia}<br>SEMANA ${next.semana}`;
-      const exCount = State.plantillas.filter(p =>
-        p.Programa===prog && Number(p.Semana)===next.semana && Number(p.Dia)===next.dia
-      ).length;
-      const ssCount = [...new Set(State.plantillas.filter(p =>
-        p.Programa===prog && Number(p.Semana)===next.semana && Number(p.Dia)===next.dia && p.Tipo==='Superset'
-      ).map(p=>p.Grupo_Superset))].length;
-      nextMeta = `${exCount} ejercicios${ssCount>0?` · ${ssCount} supersets`:''} · ~45 min`;
-      nextSesionId = `${prog}-${next.semana}-${next.dia}`;
+function renderHome(){
+  let nextInfo=null;
+  if(State.plantillas.length&&State.programa){
+    const prog=State.programa;
+    for(const s of getSemanasPrograma(prog)){
+      const dias=[...new Set(State.plantillas.filter(p=>p.Programa===prog&&Number(p.Semana)===s).map(p=>Number(p.Dia)))].sort((a,b)=>a-b);
+      for(const d of dias){if(!State.sesiones.find(se=>se.Programa===prog&&Number(se.Semana)===s&&Number(se.Dia)===d)){nextInfo={semana:s,dia:d,prog};break;}}
+      if(nextInfo)break;
     }
   }
+  const racha=calcRacha();
+  const exsDia=nextInfo?State.plantillas.filter(p=>p.Programa===nextInfo.prog&&Number(p.Semana)===nextInfo.semana&&Number(p.Dia)===nextInfo.dia):[];
+  const exCount=exsDia.filter(e=>e.Tipo!=='Calentamiento').length;
+  const mats=getMaterialDia(exsDia);
+  // Si no hay siguiente, sugerir el día 1 semana 1 igualmente (modo libre)
+  if(!nextInfo && State.programa) {
+    const prog=State.programa;
+    const sems=getSemanasPrograma(prog);
+    if(sems.length) nextInfo={semana:sems[0],dia:1,prog};
+  }
+  const heroContent=nextInfo
+    ?`<div class="hero-lbl">Sesión recomendada · Semana ${nextInfo.semana}</div>
+      <div class="hero-name">${nextInfo.prog.toUpperCase()}<br>S${nextInfo.semana}D${nextInfo.dia}</div>
+      <div class="hero-pills"><div class="hero-pill">⚡ ${exCount} ejercicios</div><div class="hero-pill">⏱ ~45 min</div>${mats.map(m=>`<div class="hero-pill">${m.emoji||''} ${m.label}</div>`).join('')}</div>
+      <div class="hero-rival">La última vez: <strong>${calcTotalUltima(nextInfo.prog,nextInfo.semana,nextInfo.dia)} reps</strong></div>
+      <button class="hero-btn" onclick="openOverview('${nextInfo.prog}',${nextInfo.semana},${nextInfo.dia})">⚡ EMPEZAR HOY</button>`
+    :`<div class="hero-name">SIN<br>PROGRAMA</div><div class="hero-rival">Comprueba la conexión con Sheets</div>`;
 
-  return `
-    <div class="status-bar"><span id="clk">${getTime()}</span><span style="letter-spacing:3px">···</span></div>
-    <div class="home-hero">
-      <div class="home-glow"></div>
-      <div class="home-eyebrow">Momentum Training</div>
-      <div class="home-title">HOY<br><em>TOCA</em></div>
-    </div>
-    <div class="scroll">
-      <div class="pad">
-        <div class="next-card" data-action="start-next" data-sesid="${nextSesionId||''}">
-          <div class="next-inner">
-            <div class="next-tag">${nextTag}</div>
-            <div class="next-name">${nextName}</div>
-            <div class="next-meta">${nextMeta}</div>
-            <button class="cta-btn" data-action="start-next" data-sesid="${nextSesionId||''}">
-              <span>EMPEZAR AHORA</span>
-              <div class="play-circle">▶</div>
-            </button>
-          </div>
-        </div>
-        <div class="section-label">Programas</div>
-        <div class="prog-card std" data-action="open-prog" data-prog="Estándar">
-          <div class="prog-glow"></div>
-          <div class="prog-badge">● ${getSesionesPrograma('Estándar')} sesiones completadas</div>
-          <div class="prog-name">ESTÁNDAR</div>
-          <div class="prog-meta">Peso corporal · Bandas elásticas</div>
-          <div class="prog-stats">
-            <div><div class="ps-val">12</div><div class="ps-lbl">Semanas</div></div>
-            <div><div class="ps-val">4</div><div class="ps-lbl">Días/sem</div></div>
-            <div><div class="ps-val">${getProgresoPrograma('Estándar')}</div><div class="ps-lbl">Progreso</div></div>
-          </div>
-        </div>
-        <div class="prog-card kb" data-action="open-prog" data-prog="Kettlebell">
-          <div class="prog-glow"></div>
-          <div class="prog-badge">● Disponible</div>
-          <div class="prog-name">KETTLEBELL</div>
-          <div class="prog-meta">Kettlebells · Bandas · Corporal</div>
-          <div class="prog-stats">
-            <div><div class="ps-val">12</div><div class="ps-lbl">Semanas</div></div>
-            <div><div class="ps-val">—</div><div class="ps-lbl">Progreso</div></div>
-          </div>
-        </div>
+  return`${geoBg()}
+    <div class="home-scroll" style="position:relative;z-index:1">
+      <div class="home-top">
+        <div class="streak">🔥 <span class="streak-n">${racha}</span> <span class="streak-l">días seguidos</span></div>
+        <div class="home-greet">¡Buenas! A por ello,</div>
+        <div class="home-title">¿LISTO<br>PARA <em>HOY?</em></div>
       </div>
+      <div class="hero-card" onclick="${nextInfo?`openOverview('${nextInfo.prog}',${nextInfo.semana},${nextInfo.dia})`:''}">
+        <div class="hero-illo"><div class="hero-illo-fallback" style="background:linear-gradient(135deg,#1557B0,#0D3B8E)">${nextInfo?getEmoji(exsDia.find(e=>e.Tipo!=='Calentamiento')?.Ejercicio||''):'🏆'}</div></div>
+        <div class="hero-info">${heroContent}</div>
+      </div>
+      <div class="week-wrap"><div class="week-lbl">Esta semana</div><div class="days">${renderWeekDots()}</div></div>
+      ${renderProgCards()}
+      <div style="height:20px"></div>
     </div>
-    ${renderBottomNav('home')}`;
+    ${renderTabs('home')}`;
 }
 
-function getSesionesPrograma(prog) {
-  return State.sesiones.filter(s=>s.Programa===prog).length;
-}
-
-function getProgresoPrograma(prog) {
-  const semanas = [...new Set(State.plantillas.filter(p=>p.Programa===prog).map(p=>p.Semana))];
-  const semanasHechas = [...new Set(State.sesiones.filter(s=>s.Programa===prog).map(s=>s.Semana))];
-  if (!semanas.length) return '—';
-  return `S${semanasHechas.length||1}/${semanas.length}`;
-}
-
-function getPlantillasSorted(prog) {
-  const dias = [];
-  const semanas = [...new Set(State.plantillas.filter(p=>p.Programa===prog).map(p=>Number(p.Semana)))].sort((a,b)=>a-b);
-  semanas.forEach(s => {
-    const d = [...new Set(State.plantillas.filter(p=>p.Programa===prog&&Number(p.Semana)===s).map(p=>Number(p.Dia)))].sort((a,b)=>a-b);
-    d.forEach(dia => dias.push({semana:s, dia}));
-  });
-  return dias;
-}
-
-// ---- WEEKS ----
-function renderWeeks() {
-  const prog = State.programa;
-  const semanas = [...new Set(State.plantillas.filter(p=>p.Programa===prog).map(p=>Number(p.Semana)))].sort((a,b)=>a-b);
-  const sesDone = State.sesiones.filter(s=>s.Programa===prog).map(s=>Number(s.Semana));
-  const currentSem = sesDone.length ? Math.max(...sesDone) : 1;
-  const pct = Math.round((currentSem/semanas.length)*100);
-
-  const weeksHtml = semanas.map(s => {
-    const isDone = s < currentSem;
-    const isCurr = s === currentSem;
-    const sesCount = State.sesiones.filter(x=>x.Programa===prog&&Number(x.Semana)===s).length;
-    return `
-      <div class="week-item ${isDone?'done':''} ${isCurr?'current':''}" data-action="open-week" data-semana="${s}">
-        <div class="week-num">${s}</div>
-        <div class="week-info">
-          <div class="week-title">Semana ${s}</div>
-          <div class="week-meta">4 sesiones${isDone?` · ${sesCount} completadas`:isCurr?' · En curso':' · Pendiente'}</div>
-        </div>
-        ${isCurr ? '<div class="week-badge">ACTUAL</div>' : isDone ? '<span>✅</span>' : '<span style="color:var(--t3)">🔒</span>'}
-      </div>`;
+function renderWeeks(){
+  const prog=State.programa;if(!prog)return renderHome();
+  const sems=getSemanasPrograma(prog);
+  const sesHechas=State.sesiones.filter(s=>s.Programa===prog).map(s=>Number(s.Semana));
+  const maxHecha=sesHechas.length?Math.max(...sesHechas):0;
+  const pct=sems.length?Math.round((maxHecha/sems.length)*100):0;
+  const weeksHtml=sems.map(s=>{
+    const isDone=s<maxHecha,isCurr=s===(maxHecha||1);
+    const sesDone=State.sesiones.filter(x=>x.Programa===prog&&Number(x.Semana)===s).length;
+    return`<div class="week-item ${isDone?'done':''} ${isCurr?'current':''}" onclick="State.semana=${s};renderAndShow('days')">
+      <div class="week-num">${s}</div>
+      <div class="week-info"><div class="week-title-txt">Semana ${s}</div><div class="week-meta-txt">4 sesiones${isDone?` · ${sesDone} completadas`:isCurr?' · En curso':' · Pendiente'}</div></div>
+      ${isCurr?'<div class="week-badge">ACTUAL</div>':isDone?'<span>✅</span>':'<span style="color:var(--t3)">🔒</span>'}
+    </div>`;
   }).join('');
-
-  return `
-    <div class="status-bar"><span>${getTime()}</span><span style="letter-spacing:3px">···</span></div>
-    <div class="topbar">
-      <div class="back-btn" data-action="back-home">←</div>
-      <div class="topbar-title">${prog.toUpperCase()}</div>
-      <div class="topbar-sub">${semanas.length} semanas</div>
-    </div>
-    <div class="scroll">
-      <div class="pad">
-        <div class="progress-wrap">
-          <div class="progress-labels">
-            <span>Progreso</span>
-            <strong>Semana ${currentSem} de ${semanas.length}</strong>
-          </div>
-          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+  return`${geoBg()}
+    <div class="topbar"><div class="back-btn" onclick="renderAndShow('home')">←</div><div class="topbar-title">${prog.toUpperCase()}</div><div class="topbar-sub">${sems.length} sem.</div></div>
+    <div class="scroll" style="position:relative;z-index:1;padding-bottom:20px">
+      <div class="prog-wrap">
+        <div class="prog-bar-card">
+          <div class="prog-labels"><span>Progreso general</span><strong>Semana ${maxHecha||1} de ${sems.length}</strong></div>
+          <div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div>
         </div>
         ${weeksHtml}
       </div>
     </div>
-    ${renderBottomNav('weeks')}`;
+    ${renderTabs('weeks')}`;
 }
 
-// ---- DAYS ----
-function renderDays() {
-  const prog = State.programa;
-  const sem = State.semana;
-  const dias = [...new Set(State.plantillas.filter(p=>p.Programa===prog&&Number(p.Semana)===sem).map(p=>Number(p.Dia)))].sort((a,b)=>a-b);
-  const diasHechos = State.sesiones.filter(s=>s.Programa===prog&&Number(s.Semana)===sem).map(s=>Number(s.Dia));
-  const nextDia = dias.find(d=>!diasHechos.includes(d));
+function renderDays(){
+  const prog=State.programa,sem=State.semana;if(!prog||!sem)return renderHome();
+  const dias=[...new Set(State.plantillas.filter(p=>p.Programa===prog&&Number(p.Semana)===sem).map(p=>Number(p.Dia)))].sort((a,b)=>a-b);
+  const sesHechas=State.sesiones.filter(s=>s.Programa===prog&&Number(s.Semana)===sem).map(s=>Number(s.Dia));
+  const nextDia=dias.find(d=>!sesHechas.includes(d));
+  const daysHtml=dias.map(d=>{
+    const isDone=sesHechas.includes(d),isNext=d===nextDia;
+    const exs=State.plantillas.filter(p=>p.Programa===prog&&Number(p.Semana)===sem&&Number(p.Dia)===d);
+    const exNoCal=exs.filter(e=>e.Tipo!=='Calentamiento');
+    const ssG=[...new Set(exs.filter(e=>e.Tipo==='Superset').map(e=>e.Grupo_Superset))];
+    const mats=getMaterialDia(exs);
+    return`<div class="day-card ${isDone?'completed':''} ${isNext?'next-up':''}" onclick="openOverview('${prog}',${sem},${d})">
+      ${isNext?'<div class="day-next-badge">SIGUIENTE</div>':''}
+      <div class="day-card-num">Sesión ${d}</div>
+      <div class="day-card-name">${prog.toUpperCase()} S${sem}D${d}</div>
+      <div class="day-chips">
+        ${isDone?'<div class="day-chip">✅ Completada</div>':''}
+        <div class="day-chip">${exNoCal.length} ejercicios</div>
+        ${ssG.length?`<div class="day-chip ss">${ssG.length}× Superset</div>`:''}
+        ${mats.filter(m=>m.dot||m.emoji==='🏋️').map(m=>`<div class="day-chip mat">${m.emoji||'🎯'} ${m.label}</div>`).join('')}
+      </div>
+      <div class="day-footer"><div class="day-count">${isDone?'Completada':'~45 min'}</div>${!isDone?'<div style="font-size:16px;color:var(--t3)">→</div>':''}</div>
+    </div>`;
+  }).join('');
+  return`${geoBg()}
+    <div class="topbar"><div class="back-btn" onclick="renderAndShow('weeks')">←</div><div class="topbar-title">SEMANA ${sem}</div><div class="topbar-sub">${prog}</div></div>
+    <div class="scroll" style="position:relative;z-index:1;padding:0 18px 20px">${daysHtml}</div>
+    ${renderTabs('days')}`;
+}
 
-  const daysHtml = dias.map(d => {
-    const isDone = diasHechos.includes(d);
-    const isNext = d === nextDia && !isDone;
-    const exs = State.plantillas.filter(p=>p.Programa===prog&&Number(p.Semana)===sem&&Number(p.Dia)===d);
-    const exNoCal = exs.filter(e=>e.Tipo!=='Calentamiento');
-    const ssGroups = [...new Set(exs.filter(e=>e.Tipo==='Superset').map(e=>e.Grupo_Superset))];
-    const cirGroups = [...new Set(exs.filter(e=>e.Tipo==='Circuito').map(e=>e.Grupo_Superset))];
-    const hasBanda = exs.some(e=>e.Equipo==='Banda');
-    const hasKB = exs.some(e=>e.Equipo==='Kettlebell');
-    const bandaColors = hasBanda ? getBandaColorsForDay(exs) : '';
+function openOverview(prog,semana,dia){State.programa=prog;State.semana=semana;State.dia=dia;renderAndShow('overview');}
 
-    return `
-      <div class="day-card ${isDone?'completed':''} ${isNext?'next-up':''}" data-action="${isDone?'':'open-day'}" data-dia="${d}">
-        ${isNext ? '<div class="day-next-badge">SIGUIENTE</div>' : ''}
-        <div class="day-num">Sesión ${d}</div>
-        <div class="day-name">${prog.toUpperCase()} S${sem}D${d}</div>
-        <div class="day-chips">
-          ${isDone ? '<div class="day-chip">✅ Completada</div>' : ''}
-          <div class="day-chip">${exNoCal.length} ejercicios</div>
-          ${ssGroups.length>0 ? `<div class="day-chip ss">${ssGroups.length}× Superset</div>` : ''}
-          ${cirGroups.length>0 ? `<div class="day-chip cir">${cirGroups.length}× Circuito</div>` : ''}
-          <div class="day-chip">🏃 Corporal</div>
-          ${hasBanda ? `<div class="day-chip mat">${bandaColors} Bandas</div>` : ''}
-          ${hasKB ? `<div class="day-chip mat">🏋️ Kettlebell</div>` : ''}
+function renderOverview(){
+  const exs=getEjerciciosDia();if(!exs.length){renderAndShow('home');return'';}
+  const mats=getMaterialDia(exs);
+  const matHtml=mats.map(m=>`<div class="mat-chip">${m.dot?`<div class="mat-dot" style="background:${m.dot}"></div>`:''} ${m.emoji||''} ${m.label}</div>`).join('');
+  const listHtml=exs.map(ex=>{
+    const tipo=ex.Tipo||'Serie';
+    const last=getUltimaVez(ex.Ejercicio);
+    const typeClass=tipo==='Calentamiento'?'calent':tipo==='Superset'?'ss':tipo==='Circuito'?'cir':'serie';
+    const typeLabel=tipo==='Superset'?`Superset ${ex.Grupo_Superset||''}`:tipo;
+    const matRow=ex.Equipo==='Banda'?`<div class="ov-item-mats"><div class="ov-mat"><div class="ov-mat-dot" style="background:#FF3B30"></div>Banda</div></div>`:ex.Equipo==='Kettlebell'?`<div class="ov-item-mats"><div class="ov-mat">🏋️ Kettlebell</div></div>`:'';
+    return`<div class="ov-item">
+      <div class="ov-thumb">${getEmoji(ex.Ejercicio)}</div>
+      <div><div class="ov-type-badge ${typeClass}">${typeLabel}</div><div class="ov-item-name">${ex.Ejercicio}</div><div class="ov-item-sub">${ex.Series_Obj||3} series · ${last?last.Reps+' reps anterior':'Primera vez'}</div>${matRow}</div>
+    </div>`;
+  }).join('');
+  return`${geoBg()}
+    <div class="scroll" style="position:relative;z-index:1;padding-bottom:20px">
+      <div class="ov-header">
+        <div class="ov-back" onclick="renderAndShow('days')">← Volver</div>
+        <div class="ov-lbl">Guía · Semana ${State.semana} · Sesión ${State.dia}</div>
+        <div class="ov-title">HOY<br><em>ENTRENAS</em></div>
+        <div class="ov-sub">${exs.length} ejercicios · ~45 min</div>
+      </div>
+      <div class="mat-banner"><div class="mat-title">📦 Material que necesitas hoy</div><div class="mat-chips">${matHtml}</div></div>
+      <div class="ov-list">${listHtml}</div>
+      <div class="ov-cta"><button class="ov-btn" onclick="startWorkout()">⚡ ¡EMPEZAR AHORA!</button></div>
+    </div>`;
+}
+
+async function startWorkout(){
+  const exs=getEjerciciosDia();
+  State.ejerciciosDia=exs;State.currentExIdx=0;State.currentSerie=0;State.seriesRegistradas=[];
+  const sesionID=uid();
+  const ses={SesionID:sesionID,Programa:State.programa,Semana:State.semana,Dia:State.dia,Nombre_Dia:`S${State.semana}D${State.dia} ${State.programa}`,Fecha_Inicio:nowStr(),Fecha_Fin:'',Completada:'No',Notas:'',_startTs:Date.now()};
+  State.sesionActiva=ses;Storage.saveSession(ses);
+  try{await Sheets.append(CONFIG.SHEETS.SESIONES,[sesionID,State.programa,State.semana,State.dia,ses.Nombre_Dia,ses.Fecha_Inicio,'','No','']);}
+  catch(e){showToast('Sin conexión — guardado local','err');}
+  renderAndShow('prep');
+}
+
+let _cdTimer=null;
+function stopCd(){if(_cdTimer){clearInterval(_cdTimer);_cdTimer=null;}}
+function startCd(){
+  stopCd();
+  let secs=5;
+  const fill=document.getElementById('cd-fill'),num=document.getElementById('cd-n');
+  if(!fill||!num)return;
+  const circ=131.9;
+  _cdTimer=setInterval(()=>{
+    secs--;num.textContent=secs;fill.style.strokeDashoffset=circ*(1-secs/5);
+    if(secs<=0){stopCd();renderAndShow('exercise');}
+  },1000);
+}
+
+function renderPrep(){
+  const exs=State.ejerciciosDia,idx=State.currentExIdx,ex=exs[idx];
+  if(!ex){renderAndShow('summary');return'';}
+  const tipo=ex.Tipo||'Serie';
+  const typeLabel=tipo==='Superset'?`Superset ${ex.Grupo_Superset}`:tipo;
+  const last=getUltimaVez(ex.Ejercicio);
+  let matHtml=`<div class="prep-row"><div class="prep-icon">🏃</div><div><div class="prep-item-name">Sin material</div><div class="prep-item-sub">Solo espacio libre</div></div></div>`;
+  if(ex.Equipo==='Banda')matHtml=`<div class="prep-row"><div class="prep-icon"><div style="width:24px;height:24px;border-radius:50%;background:#FF3B30;margin:auto"></div></div><div><div class="prep-item-name">Banda elástica</div><div class="prep-item-sub">Anclaje bajo · ~80cm elongación</div></div></div>`;
+  else if(ex.Equipo==='Kettlebell')matHtml=`<div class="prep-row"><div class="prep-icon">🏋️</div><div><div class="prep-item-name">Kettlebell ${last?.Peso_KB?last.Peso_KB+'kg':''}</div><div class="prep-item-sub">Prepara el peso adecuado</div></div></div>`;
+  return`${geoBg()}
+    <div class="prep-body">
+      <div class="prep-back" onclick="renderAndShow('overview')">← Vista general</div>
+      <div class="prep-eyebrow">${typeLabel} · Ejercicio ${idx+1} de ${exs.length}</div>
+      <div class="prep-name">${ex.Ejercicio}</div>
+      <div class="prep-hero">${getEmoji(ex.Ejercicio)}</div>
+      <div class="prep-mat-box"><div class="prep-mat-lbl">🎒 Prepara tu material</div><div class="prep-rows">${matHtml}</div></div>
+      <div class="prep-cd">
+        <div class="cd-ring">
+          <svg width="52" height="52" viewBox="0 0 52 52"><circle class="cd-bg" cx="26" cy="26" r="21"/><circle class="cd-fill" id="cd-fill" cx="26" cy="26" r="21" stroke-dasharray="131.9" stroke-dashoffset="0"/></svg>
+          <div class="cd-n" id="cd-n">5</div>
         </div>
-        <div class="day-footer">
-          <div class="day-count">${isDone ? 'Completada' : `~45 min`}</div>
-          ${!isDone ? '<div style="font-size:16px;color:var(--t3)">→</div>' : ''}
+        <div class="cd-info"><strong id="cd-ex">${ex.Ejercicio}</strong>empieza en unos segundos</div>
+      </div>
+      <button class="prep-go" onclick="stopCd();renderAndShow('exercise')">YA ESTOY LISTO →</button>
+    </div>`;
+}
+
+function getExBg(ex){
+  const t=ex.Tipo||'Serie';
+  if(t==='Superset')return'#2e1a00,#8c4a00';
+  if(t==='Circuito')return'#002030,#004060';
+  if(ex.Equipo==='Kettlebell')return'#1a0a30,#3d1a6e';
+  return'#0d3b8e,#1a73e8';
+}
+function getTypeColor(tipo){if(tipo==='Superset')return'var(--orange)';if(tipo==='Circuito')return'#00CFFF';if(tipo==='Calentamiento')return'var(--purple)';return'var(--yellow)';}
+function getExInGroup(ex,exs){return exs.filter(e=>e.Grupo_Superset===ex.Grupo_Superset&&e.Tipo===ex.Tipo&&Number(e.Orden)<Number(ex.Orden)).length;}
+function getGroupTotal(ex,exs){return exs.filter(e=>e.Grupo_Superset===ex.Grupo_Superset&&e.Tipo===ex.Tipo).length;}
+
+function renderExercise(){
+  const exs=State.ejerciciosDia,idx=State.currentExIdx,ex=exs[idx];
+  if(!ex){renderAndShow('summary');return'';}
+  const tipo=ex.Tipo||'Serie';
+  const isCalent=tipo==='Calentamiento';
+  const last=getUltimaVez(ex.Ejercicio);
+  const goalReps=last?Number(last.Reps)+1:Number(ex.Reps_Obj||12);
+  State.currentReps=goalReps;
+  const numSeries=Number(ex.Series_Obj||3);
+  const tagClass=tipo==='Superset'?'ss':tipo==='Circuito'?'cir':tipo==='Calentamiento'?'calent':'serie';
+  const tagLabel=tipo==='Superset'?`SS ${ex.Grupo_Superset}`:tipo==='Circuito'?'Circuito':tipo==='Calentamiento'?'Calent.':'Serie';
+  let groupHtml='';
+  if(tipo==='Superset'||tipo==='Circuito'){
+    const total=getGroupTotal(ex,exs),pos=getExInGroup(ex,exs);
+    const gpCls=tipo==='Superset'?'gp-ss':'gp-cir';
+    groupHtml=`<div class="group-pill ${gpCls}"><div class="gp-dot"></div><div class="gp-txt">${tipo} ${ex.Grupo_Superset}</div><div class="gp-sub">· Ej ${pos+1} de ${total}</div></div>`;
+  }
+  let bandaHtml='';
+  if(ex.Equipo==='Banda')bandaHtml=`<div class="banda-badge"><div class="bb-dots"><div class="bb-dot" style="background:#FF3B30"></div></div><div class="bb-sep"></div><div class="bb-kg">${last?.Peso_Banda_kg||'7-16'} kg</div><div class="bb-sep"></div><div class="bb-lbl">anclaje bajo</div></div>`;
+  else if(ex.Equipo==='Kettlebell')bandaHtml=`<div class="banda-badge"><div class="bb-kg">🏋️ ${last?.Peso_KB||'—'} kg</div></div>`;
+  const dotsHtml=Array.from({length:numSeries},(_,i)=>`<div class="sdot ${i===State.currentSerie?'active':i<State.currentSerie?'done':''}"></div>`).join('');
+
+  if(isCalent){
+    return`${geoBg()}
+      <div class="ex-screen">
+        <div class="ex-hero" style="background:linear-gradient(135deg,#2d0a4a,#4a1a7a)"><div style="font-size:100px;position:relative;z-index:1">🔥</div><div class="ex-hero-overlay"></div>
+          <div class="ex-topbar"><div class="ex-back-btn" onclick="renderAndShow('overview')">←</div><div class="ex-prog"><span class="ep-num">1/${exs.length}</span><span class="ep-tag calent">Calent.</span></div></div>
+        </div>
+        <div class="calent-hero">
+          <div class="calent-emoji">🔥</div>
+          <div class="calent-title">CALENTAMIENTO</div>
+          <div class="calent-sub">Prepara tu cuerpo.<br>Movilidad general.</div>
+          <button class="calent-done-btn" id="calent-btn" onclick="doneCalent(this)">MARCAR COMO COMPLETADO ✓</button>
+        </div>
+        <div style="padding:0 18px max(18px,env(safe-area-inset-bottom));position:relative;z-index:1">
+          <button style="width:100%;padding:14px;background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.18);border-radius:14px;color:var(--t2);font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer" onclick="nextExercise()">SALTAR →</button>
         </div>
       </div>`;
-  }).join('');
-
-  return `
-    <div class="status-bar"><span>${getTime()}</span><span style="letter-spacing:3px">···</span></div>
-    <div class="topbar">
-      <div class="back-btn" data-action="back-weeks">←</div>
-      <div class="topbar-title">SEMANA ${sem}</div>
-      <div class="topbar-sub">${prog}</div>
-    </div>
-    <div class="scroll"><div class="pad">${daysHtml}</div></div>
-    ${renderBottomNav('days')}`;
-}
-
-function getBandaColorsForDay(exs) {
-  const bandaIds = new Set();
-  exs.forEach(e => {
-    // Colores de bandas usadas anteriormente en este ejercicio
-    const last = Sheets.getUltimaVez(State.ejerciciosAll, e.Ejercicio);
-    if (last && last.Color_Banda) {
-      last.Color_Banda.split(',').forEach(c => {
-        const b = CONFIG.BANDAS.find(x=>x.nombre.trim()===c.trim());
-        if (b) bandaIds.add(b.color);
-      });
-    }
-  });
-  return [...bandaIds].map(c=>`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c};margin-right:2px"></span>`).join('');
-}
-
-// ---- CALENTAMIENTO ----
-function renderCalent() {
-  const prog = State.programa, sem = State.semana, dia = State.dia;
-  const exs = getEjerciciosDia();
-  const idx = 0;
-  const total = exs.length;
-  const nextEx = exs[1];
-
-  return `
-    <div class="status-bar"><span>${getTime()}</span><span style="letter-spacing:3px">···</span></div>
-    <div class="ex-photo">
-      <div class="ex-photo-bg" style="background:linear-gradient(135deg,#1a0d2e,#2e1a4a)">🔥</div>
-      <div class="ex-photo-overlay"></div>
-      <div class="ex-photo-topbar">
-        <div class="ex-back-round" data-action="back-days">←</div>
-        <div class="ex-type-badge" style="background:rgba(176,102,255,.15);color:var(--purple);border:1px solid rgba(176,102,255,.3)">● Calentamiento</div>
-      </div>
-      <div class="ex-name-wrap">
-        <div class="ex-name-bg"><div class="ex-name-big">CALENTAMIENTO</div></div>
-      </div>
-    </div>
-    <div class="ex-nav">
-      <div class="ex-nav-btn dim">← Anterior</div>
-      <div class="ex-nav-info">
-        <div class="ex-nav-prog">EJERCICIO 1 / ${total}</div>
-        <div class="ex-nav-sub">Sesión ${dia} · S${sem}</div>
-      </div>
-      <div class="ex-nav-btn" data-action="next-ex" data-idx="1">Siguiente →</div>
-    </div>
-    <div class="scroll">
-      <div class="calent-hero">
-        <div class="calent-emoji">🔥</div>
-        <div class="calent-title">CALENTAMIENTO</div>
-        <div class="calent-sub">Movilidad general<br>Prepara el cuerpo para el entrenamiento</div>
-        <button class="cta-btn" id="calent-btn" data-action="toggle-calent" style="max-width:300px;margin:0 auto">
-          MARCAR COMO COMPLETADO ✓
-        </button>
-      </div>
-      ${renderVideoGuides('calentamiento movilidad', 'warm up routine')}
-      ${renderNotes()}
-    </div>`;
-}
-
-// ---- EXERCISE ----
-function renderExercise() {
-  const exs = getEjerciciosDia();
-  const idx = State.currentExIdx;
-  const ex = exs[idx];
-  if (!ex) { goTo('summary'); return ''; }
-
-  const tipo = ex.Tipo;
-  const total = exs.length;
-  const prevIdx = idx - 1;
-  const nextIdx = idx + 1;
-
-  // Group exercises (superset/circuito)
-  let groupExs = [ex];
-  if (tipo === 'Superset' || tipo === 'Circuito') {
-    groupExs = exs.filter(e => e.Grupo_Superset === ex.Grupo_Superset && e.Tipo === tipo);
   }
 
-  const isSingle = groupExs.length === 1;
-  const isGroup = !isSingle;
-
-  // Type badge
-  const badges = {
-    Serie:    `background:rgba(77,245,200,.15);color:var(--teal);border:1px solid rgba(77,245,200,.3)`,
-    Superset: `background:rgba(255,165,2,.15);color:var(--orange);border:1px solid rgba(255,165,2,.3)`,
-    Circuito: `background:rgba(0,180,255,.15);color:var(--blue);border:1px solid rgba(0,180,255,.3)`,
-  };
-  const badgeStyle = badges[tipo] || badges.Serie;
-  const badgeLabel = isGroup ? `${tipo} ${ex.Grupo_Superset}` : `● Serie · ${ex.Equipo||'Corporal'}`;
-
-  // Photo bg gradient by type
-  const bgs = {
-    Serie:    '#0d1a0d,#1a2e1a',
-    Superset: '#1f0f00,#2e1a00',
-    Circuito: '#001520,#002030',
-  };
-  const bgColors = bgs[tipo] || bgs.Serie;
-
-  // Nav label
-  const navLabel = isGroup
-    ? `${tipo === 'Circuito' ? 'EJERCICIOS' : 'EJERCICIO'} ${idx+1}-${idx+groupExs.length} / ${total}`
-    : `EJERCICIO ${idx+1} / ${total}`;
-  const navSub = isGroup
-    ? `${tipo} ${ex.Grupo_Superset} · ${tipo==='Circuito'?'Sin descanso':'Alternar series'}`
-    : `Sesión ${State.dia} · S${State.semana}`;
-
-  // Exercises name for photo
-  const displayName = isGroup ? `${tipo.toUpperCase()} ${ex.Grupo_Superset}` : ex.Ejercicio;
-  const photoEmoji = getEjercicioEmoji(ex.Ejercicio);
-
-  // Num series
-  const numSeries = Number(ex.Series_Obj) || 3;
-
-  // Build table
-  const tableHtml = isGroup
-    ? buildGroupTable(groupExs, numSeries)
-    : buildSerieTable(ex, numSeries);
-
-  // SS/Cir indicator
-  const groupIndicator = isGroup ? `
-    <div class="ss-bar ${tipo === 'Superset' ? 'ss' : 'cir'}">
-      <div class="ss-dot"></div>
-      <div class="ss-text">${tipo} ${ex.Grupo_Superset}</div>
-      <div class="ss-sub">${tipo==='Circuito' ? `${groupExs.length} ejercicios · Sin descanso` : 'Alternar serie a serie'}</div>
-    </div>` : '';
-
-  // Next/prev labels
-  const isLast = nextIdx >= total;
-  const nextLabel = isLast ? 'Finalizar' : 'Siguiente →';
-  const nextAction = isLast ? 'finish-session' : 'next-ex';
-  const nextDataIdx = isLast ? '' : `data-idx="${getNextGroupIdx(exs, idx, groupExs)}"`;
-
-  // YouTube search term
-  const ytQuery1 = encodeURIComponent(ex.Ejercicio + ' ejercicio técnica');
-  const ytQuery2 = encodeURIComponent(ex.Ejercicio + ' variaciones');
-
-  return `
-    <div class="status-bar"><span>${getTime()}</span><span style="letter-spacing:3px">···</span></div>
-    <div class="ex-photo">
-      <div class="ex-photo-bg" style="background:linear-gradient(135deg,${bgColors})">${photoEmoji}</div>
-      <div class="ex-photo-overlay"></div>
-      <div class="ex-photo-topbar">
-        <div class="ex-back-round" data-action="${prevIdx < 0 ? 'back-calent' : 'prev-ex'}" data-idx="${prevIdx}">←</div>
-        <div class="ex-type-badge" style="${badgeStyle}">● ${badgeLabel}</div>
+  return`${geoBg()}
+    <div class="ex-screen">
+      <div class="ex-hero" style="background:linear-gradient(135deg,${getExBg(ex)})">
+        <div style="font-size:110px;position:relative;z-index:1">${getEmoji(ex.Ejercicio)}</div>
+        <div class="ex-hero-overlay"></div>
+        <div class="ex-topbar">
+          <div class="ex-back-btn" onclick="renderAndShow('overview')">←</div>
+          <div class="ex-prog"><span class="ep-num">${idx+1}/${exs.length}</span><span class="ep-tag ${tagClass}">${tagLabel}</span></div>
+        </div>
       </div>
-      <div class="ex-name-wrap">
-        <div class="ex-name-bg"><div class="ex-name-big">${displayName}</div></div>
-      </div>
-    </div>
-    <div class="ex-nav">
-      <div class="ex-nav-btn ${prevIdx<0?'dim':''}" data-action="${prevIdx<0?'':'prev-ex'}" data-idx="${prevIdx}">${prevIdx<0?'← Anterior':'← Anterior'}</div>
-      <div class="ex-nav-info">
-        <div class="ex-nav-prog">${navLabel}</div>
-        <div class="ex-nav-sub">${navSub}</div>
-      </div>
-      <div class="ex-nav-btn" data-action="${nextAction}" ${nextDataIdx}>${nextLabel}</div>
-    </div>
-    ${groupIndicator}
-    <div class="scroll">
-      ${tableHtml}
-      <button class="add-serie-btn" data-action="add-serie">+ Agregar Serie</button>
-      ${renderVideoGuides(ex.Ejercicio + ' técnica', ex.Ejercicio + ' variaciones')}
-      ${renderNotes()}
-      ${renderOptionalRPE()}
-    </div>`;
-}
-
-function getNextGroupIdx(exs, currentIdx, groupExs) {
-  // Skip to first ex after this group
-  const lastGroupIdx = exs.findIndex((e,i) => i > currentIdx && !groupExs.includes(e));
-  return lastGroupIdx >= 0 ? lastGroupIdx : currentIdx + groupExs.length;
-}
-
-function getEjercicioEmoji(nombre) {
-  const n = nombre.toLowerCase();
-  if (n.includes('flexion') || n.includes('flexión') || n.includes('push')) return '💪';
-  if (n.includes('sentadilla') || n.includes('squat')) return '🦵';
-  if (n.includes('desplante') || n.includes('lunge')) return '🏃';
-  if (n.includes('plancha') || n.includes('plank')) return '🧘';
-  if (n.includes('remo') || n.includes('row')) return '🚣';
-  if (n.includes('dips')) return '⬇️';
-  if (n.includes('curl')) return '💪';
-  if (n.includes('kettlebell') || n.includes('kb') || n.includes('swing')) return '🏋️';
-  if (n.includes('burpee')) return '🔥';
-  if (n.includes('step')) return '⬆️';
-  return '⚡';
-}
-
-// ---- BUILD TABLES ----
-function buildSerieTable(ex, numSeries) {
-  const equipo = ex.Equipo || 'Corporal';
-  const showKg = equipo !== 'Corporal';
-  const kgHeader = equipo === 'Banda' ? 'KG' : equipo === 'Kettlebell' ? 'KB' : '';
-  const progress = Storage.loadProgress();
-  const exKey = `ex-${State.currentExIdx}`;
-
-  const rows = Array.from({length: numSeries}, (_, i) => {
-    const saved = progress[exKey]?.[i] || {};
-    const isDone = saved.done || false;
-    const isAct = !isDone && i === Array.from({length:numSeries},(_,j)=>j).find(j=>!(progress[exKey]?.[j]?.done));
-    const last = Sheets.getUltimaVez(State.ejerciciosAll, ex.Ejercicio);
-
-    return { isDone, isAct, i, saved, last, ex, equipo, exKey };
-  });
-
-  return `
-    <div class="tbl-wrap">
-      <div class="tbl-head">
-        <div class="th">S</div>
-        <div class="th left">ANTERIOR</div>
-        <div class="th">${showKg ? kgHeader : ''}</div>
-        <div class="th">REPS</div>
-        <div class="th">✓</div>
-      </div>
-      <div class="tbl-body" id="tbl-main">
-        ${rows.map(r => buildSerieRow(r)).join('')}
-      </div>
-    </div>`;
-}
-
-function buildSerieRow({isDone, isAct, i, saved, last, ex, equipo, exKey}) {
-  const isBanda = equipo === 'Banda';
-  const isKB = equipo === 'Kettlebell';
-  const reps = saved.reps || (last ? last.Reps : '—');
-  const prevText = last ? `${last.Reps}r` : '—';
-  const prevSub  = last ? (last.Color_Banda ? last.Color_Banda : equipo) : equipo;
-  const savedBandas = saved.bandas || (last && last.Color_Banda ? last.Color_Banda.split(',').map(c=>c.trim()) : []);
-  const savedKg = saved.kg || (last && last.Peso_KB ? last.Peso_KB : '');
-  const savedAnclaje = saved.anclaje || (last && last.Anclaje_Banda ? last.Anclaje_Banda : 'Bajo');
-  const savedElong = saved.elong || (last && last.Elongacion_cm ? last.Elongacion_cm : 80);
-
-  let kgHtml = '';
-  if (isBanda) {
-    const kg = calcBandaKg(savedBandas);
-    kgHtml = kg ? `<div class="er-kg-val">${kg}</div><div class="er-kg-lbl">kg</div>` : `<div class="er-kg-val" style="color:var(--t3)">—</div>`;
-  } else if (isKB && savedKg) {
-    kgHtml = `<div class="er-kg-val">${savedKg}</div><div class="er-kg-lbl">kg</div>`;
-  }
-
-  const grpCls = isDone ? 'done-block' : '';
-  const badgeCls = isDone ? 'badge-done' : isAct ? 'badge-active' : 'badge-pending';
-  const badgeTxt = isDone ? '✓ Hecho' : isAct ? '● Actual' : 'Pendiente';
-
-  return `
-    <div class="serie-block ${grpCls}" id="sb-${exKey}-${i}">
-      <div class="serie-block-label">
-        <div class="sbl-num">SERIE ${i+1}</div>
-        <div class="sbl-badge ${badgeCls}">${badgeTxt}</div>
-      </div>
-      <div class="ex-row ${isBanda?'banda-row':''}">
-        <div></div>
+      <div class="s-dots">${dotsHtml}</div>
+      ${groupHtml}
+      <div class="ex-content">
         <div>
-          <div class="er-exname">${ex.Ejercicio}</div>
-          <div class="er-prev">${prevText} · ${prevSub}</div>
+          <div class="ex-type-row"><div class="ex-type-dot" style="background:${getTypeColor(tipo)}"></div><div class="ex-type-lbl">${tipo==='Superset'?`SS ${ex.Grupo_Superset} · Ej ${getExInGroup(ex,exs)+1}/${getGroupTotal(ex,exs)}`:tipo} · ${ex.Equipo||'Corporal'}</div></div>
+          <div class="ex-name">${ex.Ejercicio}</div>
+          ${bandaHtml}
         </div>
-        <div class="er-kg" id="kg-${exKey}-${i}">${kgHtml}</div>
-        <div class="er-reps">
-          <button class="reps-btn" data-action="reps-dec" data-key="${exKey}" data-idx="${i}">−</button>
-          <div class="reps-val" id="rv-${exKey}-${i}">${reps}</div>
-          <button class="reps-btn" data-action="reps-inc" data-key="${exKey}" data-idx="${i}">+</button>
-        </div>
-        <div class="er-check ${isDone?'done':''}" id="chk-${exKey}-${i}" data-action="toggle-check" data-key="${exKey}" data-idx="${i}" data-exkey="${exKey}">${isDone?'✓':'○'}</div>
-      </div>
-      ${isBanda ? buildBandaDetail(exKey, i, savedBandas, savedAnclaje, savedElong) : ''}
-    </div>`;
-}
-
-function buildGroupTable(groupExs, numSeries) {
-  const progress = Storage.loadProgress();
-
-  let rows = '';
-  for (let s = 0; s < numSeries; s++) {
-    const groupKey = `group-${State.currentExIdx}`;
-    const saved = progress[groupKey]?.[s] || {};
-    const isDone = saved.done || false;
-    const isAct = !isDone && s === Array.from({length:numSeries},(_,j)=>j).find(j=>!(progress[groupKey]?.[j]?.done));
-    const badgeCls = isDone ? 'badge-done' : isAct ? 'badge-active' : 'badge-pending';
-    const badgeTxt = isDone ? '✓ Hecho' : isAct ? '● Actual' : 'Pendiente';
-
-    rows += `
-      <div class="serie-block ${isDone?'done-block':''}" id="sb-${groupKey}-${s}">
-        <div class="serie-block-label">
-          <div class="sbl-num">SERIE ${s+1}</div>
-          <div class="sbl-badge ${badgeCls}">${badgeTxt}</div>
-        </div>
-        ${groupExs.map((ex, ei) => {
-          const isBanda = (ex.Equipo||'Corporal') === 'Banda';
-          const isKB = (ex.Equipo||'Corporal') === 'Kettlebell';
-          const last = Sheets.getUltimaVez(State.ejerciciosAll, ex.Ejercicio);
-          const exSaved = progress[groupKey]?.[s]?.[`ex${ei}`] || {};
-          const savedBandas = exSaved.bandas || (last && last.Color_Banda ? last.Color_Banda.split(',').map(c=>c.trim()) : []);
-          const savedAnclaje = exSaved.anclaje || 'Bajo';
-          const savedElong = exSaved.elong || 80;
-          const reps = exSaved.reps || (last ? last.Reps : '—');
-          const kgId = `kg-${groupKey}-${s}-${ei}`;
-          let kgHtml = '';
-          if (isBanda) {
-            const kg = calcBandaKg(savedBandas);
-            kgHtml = kg ? `<div class="er-kg-val">${kg}</div><div class="er-kg-lbl">kg</div>` : `<div class="er-kg-val" style="color:var(--t3)">—</div>`;
-          } else if (isKB && last?.Peso_KB) {
-            kgHtml = `<div class="er-kg-val">${last.Peso_KB}</div><div class="er-kg-lbl">kg</div>`;
-          }
-
-          const chkHtml = ei === 0
-            ? `<div class="er-check ${isDone?'done':''}" id="chk-${groupKey}-${s}" data-action="toggle-group-check" data-key="${groupKey}" data-idx="${s}">${isDone?'✓':'○'}</div>`
-            : `<div class="er-check-blank"></div>`;
-
-          return `
-            <div class="ex-row ${isBanda?'banda-row':''}">
-              <div></div>
-              <div>
-                <div class="er-exname">${ex.Ejercicio}</div>
-                <div class="er-prev">${last?last.Reps+'r':'—'} · ${last&&last.Color_Banda?last.Color_Banda:ex.Equipo||'Corporal'}</div>
-              </div>
-              <div class="er-kg" id="${kgId}">${kgHtml}</div>
-              <div class="er-reps">
-                <button class="reps-btn" data-action="reps-dec-g" data-key="${groupKey}" data-serie="${s}" data-ei="${ei}">−</button>
-                <div class="reps-val" id="rv-${groupKey}-${s}-${ei}">${reps}</div>
-                <button class="reps-btn" data-action="reps-inc-g" data-key="${groupKey}" data-serie="${s}" data-ei="${ei}">+</button>
-              </div>
-              ${chkHtml}
-            </div>
-            ${isBanda ? buildBandaDetail(`${groupKey}-${s}-${ei}`, 0, savedBandas, savedAnclaje, savedElong, kgId) : ''}`;
-        }).join('')}
-      </div>`;
-  }
-
-  const hasKg = groupExs.some(e=>(e.Equipo||'Corporal')!=='Corporal');
-  return `
-    <div class="tbl-wrap">
-      <div class="tbl-head">
-        <div class="th">S</div>
-        <div class="th left">EJERCICIO</div>
-        <div class="th">${hasKg?'KG':''}</div>
-        <div class="th">REPS</div>
-        <div class="th">✓</div>
-      </div>
-      <div class="tbl-body" id="tbl-main">${rows}</div>
-    </div>`;
-}
-
-function buildBandaDetail(key, idx, savedBandas, savedAnclaje, savedElong, kgId=null) {
-  const realKgId = kgId || `kg-${key}-${idx}`;
-  const chips = CONFIG.BANDAS.map(b => {
-    const isSel = savedBandas.includes(b.nombre);
-    return `<div class="bchip ${isSel?'sel':''}" data-banda="${b.nombre}" data-min="${b.min}" data-max="${b.max}" data-kgid="${realKgId}" data-detkey="${key}-${idx}" onclick="toggleBandaChip(this)">
-      <div class="bchip-dot" style="background:${b.color}"></div>
-    </div>`;
-  }).join('');
-
-  const anclHtml = CONFIG.ANCLAJES.map(a =>
-    `<div class="anc-chip ${a===savedAnclaje?'sel':''}" onclick="selAnclaje(this)">${a==='Bajo'?'⬇️':a==='Medio'?'➡️':'⬆️'} ${a}</div>`
-  ).join('');
-
-  const elongId = `elong-${key}-${idx}`;
-
-  return `
-    <div class="banda-detail">
-      <div class="banda-detail-inner">
-        ${chips}
-        <div class="det-div"></div>
-        <div class="anc-mini">${anclHtml}</div>
-        <div class="det-div"></div>
-        <div class="elong-mini">
-          <button class="elong-btn" data-action="elong-dec" data-id="${elongId}">−</button>
-          <div class="elong-val" id="${elongId}">${savedElong}cm</div>
-          <button class="elong-btn" data-action="elong-inc" data-id="${elongId}">+</button>
-        </div>
-      </div>
-    </div>`;
-}
-
-function calcBandaKg(bandaNames) {
-  if (!bandaNames || !bandaNames.length) return '';
-  let mn=0, mx=0;
-  bandaNames.forEach(nombre => {
-    const b = CONFIG.BANDAS.find(x => x.nombre === nombre);
-    if (b) { mn += b.min; mx += b.max; }
-  });
-  return mn > 0 ? `${mn}-${mx}` : '';
-}
-
-// ---- VIDEOS ----
-function renderVideoGuides(query1, query2) {
-  const yt1 = `https://youtube.com/results?search_query=${encodeURIComponent(query1)}`;
-  const yt2 = `https://youtube.com/results?search_query=${encodeURIComponent(query2)}`;
-  return `
-    <div class="vid-sec">
-      <div class="vid-lbl">Vídeos guía</div>
-      <div class="vid-row">
-        <a class="vid-btn" href="${yt1}" target="_blank">
-          <div class="vid-play">▶</div>
-          <div><div class="vid-title">Técnica básica</div><div class="vid-sub">YouTube →</div></div>
-        </a>
-        <a class="vid-btn" href="${yt2}" target="_blank">
-          <div class="vid-play">▶</div>
-          <div><div class="vid-title">Variaciones</div><div class="vid-sub">YouTube →</div></div>
-        </a>
-      </div>
-    </div>`;
-}
-
-// ---- NOTES ----
-function renderNotes() {
-  return `
-    <div class="notes-sec">
-      <div class="notes-lbl">Notas de sesión</div>
-      <textarea class="notes-input" placeholder="Añade notas sobre esta sesión..." data-action="save-notes"></textarea>
-    </div>`;
-}
-
-// ---- RPE/RIR OPTIONAL ----
-let rpeOptCounter = 0;
-function renderOptionalRPE() {
-  const id = ++rpeOptCounter;
-  return `
-    <div class="opt-toggle" id="opt-t${id}" data-action="toggle-opt" data-body="opt-b${id}" data-icon="opt-i${id}">
-      <div class="opt-toggle-label">RPE / RIR — Opcionales</div>
-      <em class="opt-toggle-icon" id="opt-i${id}">∨</em>
-    </div>
-    <div class="opt-body" id="opt-b${id}">
-      <div class="opt-inner">
-        <div class="field-label">RPE — Esfuerzo percibido</div>
-        <div class="rpe-card">
-          <div class="rpe-top">
-            <div class="rpe-num" id="rpe-n${id}">7</div>
-            <div class="rpe-desc" id="rpe-d${id}">Duro, aguanto</div>
+        <div>
+          <div class="rival-card">
+            <div class="riv-side"><div class="riv-vs">Última vez</div><div class="riv-n last">${last?last.Reps:'—'}</div><div class="riv-lbl">${last?'reps anteriores':'primera vez'}</div></div>
+            <div class="riv-arr">→</div><div class="riv-sep"></div>
+            <div class="riv-side"><div class="riv-vs">Tu reto hoy</div><div class="riv-n goal">${goalReps}</div><div class="riv-lbl">¡supérate!</div></div>
           </div>
-          <div class="rpe-track">
-            ${Array.from({length:10},(_,i)=>`<div class="rpe-pip ${i<7?'on':''}" data-action="set-rpe" data-val="${i+1}" data-nid="rpe-n${id}" data-did="rpe-d${id}"></div>`).join('')}
+          <div class="counter">
+            <div class="cnt-btn" onclick="chReps(-1)">−</div>
+            <div class="cnt-center"><div class="cnt-num" id="cnt-num">${goalReps}</div><div class="cnt-unit">repeticiones</div></div>
+            <div class="cnt-btn" onclick="chReps(1)">+</div>
           </div>
-        </div>
-        <div class="field-label">RIR — Reps en reserva</div>
-        <div class="rir-grid">
-          ${[['0','Fallo'],['1','1 res.'],['2','2 res.'],['3+','Fácil']].map(([v,l],i)=>`
-            <div class="rir-btn ${i===2?'sel':''}" data-action="set-rir"><div class="rir-val">${v}</div><div class="rir-lbl">${l}</div></div>`).join('')}
+          <button class="done-btn" id="done-btn" onclick="doneSerie()">✓ &nbsp; SERIE COMPLETADA</button>
         </div>
       </div>
     </div>`;
 }
 
-// ---- SUMMARY ----
-function renderSummary() {
-  const ses = State.sesionActiva;
-  const series = State.seriesRegistradas;
-  const exNames = [...new Set(series.map(s=>s.Ejercicio))];
-  const durMin = ses ? Math.round((Date.now()-ses._startTs)/60000) : 0;
+function chReps(d){State.currentReps=Math.max(0,State.currentReps+d);const el=document.getElementById('cnt-num');if(el)el.textContent=State.currentReps;}
 
-  const exHtml = exNames.map(n => {
-    const ss = series.filter(s=>s.Ejercicio===n);
-    const reps = ss.map(s=>s.Reps).join('/');
-    return `<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">
-      <div style="flex:1;font-size:14px;font-weight:700">${n}</div>
-      <div style="font-size:13px;color:var(--t2)">${ss.length} series · ${reps} reps</div>
-    </div>`;
-  }).join('');
-
-  return `
-    <div class="status-bar"><span>${getTime()}</span><span style="letter-spacing:3px">···</span></div>
-    <div class="scroll">
-      <div class="summary-hero">
-        <div class="summary-emoji">🏆</div>
-        <div class="summary-title">SESIÓN<br><em>COMPLETADA</em></div>
-        <div class="summary-sub">${ses?ses.Nombre_Dia:''}</div>
-      </div>
-      <div class="summary-stats">
-        <div class="sum-stat"><div class="sum-stat-val">${exNames.length}</div><div class="sum-stat-lbl">Ejercicios</div></div>
-        <div class="sum-stat"><div class="sum-stat-val">${series.length}</div><div class="sum-stat-lbl">Series</div></div>
-        <div class="sum-stat"><div class="sum-stat-val">${durMin}m</div><div class="sum-stat-lbl">Duración</div></div>
-      </div>
-      <div class="pad">
-        <div class="section-label">Resumen</div>
-        <div style="background:var(--s1);border:1px solid var(--border);border-radius:16px;padding:0 16px">${exHtml || '<div style="padding:16px;color:var(--t2);font-size:13px">Sin series registradas</div>'}</div>
-        <div style="margin-top:16px"><button class="cta-btn" data-action="go-home">VOLVER AL INICIO</button></div>
-        <div style="height:20px"></div>
-      </div>
-    </div>`;
+function doneCalent(btn){
+  btn.classList.add('done');btn.textContent='✓ COMPLETADO';
+  showToast('Calentamiento completado ✓');showSaved();
+  setTimeout(()=>nextExercise(),800);
 }
 
-// ---- HISTORY ----
-function renderHistory() {
-  const months = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const year = State.calYear, month = State.calMonth;
-  const now = new Date();
-
-  const sessionDays = new Set();
-  State.sesiones.forEach(s => {
-    if (!s.Fecha_Inicio) return;
-    const parts = s.Fecha_Inicio.split(/[\/,\s]+/);
-    if (parts.length >= 3) {
-      const d = new Date(parts[2], parts[1]-1, parts[0]);
-      if (d.getFullYear()===year && d.getMonth()===month) sessionDays.add(d.getDate());
-    }
-  });
-
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month+1, 0).getDate();
-  const startOffset = (firstDay+6)%7;
-  const dayLabels = ['L','M','X','J','V','S','D'].map(d=>`<div class="cal-day-label">${d}</div>`).join('');
-  let cells = Array(startOffset).fill('<div></div>');
-  for (let d=1; d<=daysInMonth; d++) {
-    const isToday = d===now.getDate() && month===now.getMonth() && year===now.getFullYear();
-    const hasSes = sessionDays.has(d);
-    cells.push(`<div class="cal-day ${isToday?'today':''} ${hasSes?'has-session':''}">${d}${hasSes?'<div class="cal-dot"></div>':''}</div>`);
-  }
-
-  const recentSes = [...State.sesiones].reverse().slice(0,15);
-  const sesHtml = recentSes.length
-    ? recentSes.map(s => {
-        const parts = (s.Fecha_Inicio||'').split(/[\/,\s]+/);
-        const day = parts[0]||'?';
-        const mon = months[Number(parts[1])-1]?.slice(0,3).toUpperCase()||'';
-        return `<div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--s1);border:1px solid var(--border);border-radius:16px;margin-bottom:8px">
-          <div style="width:44px;height:44px;border-radius:13px;background:var(--s2);display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0">
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--accent);line-height:1">${day}</div>
-            <div style="font-size:9px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.08em">${mon}</div>
-          </div>
-          <div style="flex:1">
-            <div style="font-size:14px;font-weight:700;margin-bottom:2px">${s.Nombre_Dia||'Sesión'}</div>
-            <div style="font-size:12px;color:var(--t2)">${s.Programa} · Semana ${s.Semana}</div>
-          </div>
-        </div>`;
-      }).join('')
-    : '<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">Sin sesiones</div><div class="empty-sub">Completa tu primera sesión para ver el historial</div></div>';
-
-  return `
-    <div class="status-bar"><span>${getTime()}</span><span style="letter-spacing:3px">···</span></div>
-    <div class="topbar"><div class="topbar-title">HISTORIAL</div></div>
-    <div class="scroll">
-      <div class="pad">
-        <div class="cal-header">
-          <button class="cal-nav" data-action="cal-prev">‹</button>
-          <div class="cal-month">${months[month]} ${year}</div>
-          <button class="cal-nav" data-action="cal-next">›</button>
-        </div>
-        <div class="cal-grid">${dayLabels}${cells.join('')}</div>
-        <div class="section-label" style="margin-top:24px">Sesiones recientes</div>
-        ${sesHtml}
-        <div style="height:20px"></div>
-      </div>
-    </div>
-    ${renderBottomNav('history')}`;
+function nextExercise(){
+  State.currentExIdx++;
+  if(State.currentExIdx>=State.ejerciciosDia.length){finishWorkout();return;}
+  State.currentSerie=0;
+  renderAndShow('prep');
 }
 
-// ---- BOTTOM NAV ----
-function renderBottomNav(active) {
-  return `
-    <div class="bottom-nav">
-      <div class="nav-item ${active==='home'?'active':''}" data-action="nav-home">
-        <div class="nav-icon">🏠</div>
-        <div class="nav-label">Inicio</div>
-      </div>
-      <div class="nav-item ${active==='weeks'||active==='days'?'active':''}" data-action="nav-weeks">
-        <div class="nav-icon">⚡</div>
-        <div class="nav-label">Entrena</div>
-      </div>
-      <div class="nav-item ${active==='history'?'active':''}" data-action="nav-history">
-        <div class="nav-icon">📅</div>
-        <div class="nav-label">Historial</div>
-      </div>
-    </div>`;
+async function doneSerie(){
+  const btn=document.getElementById('done-btn');
+  if(btn){btn.classList.add('done');btn.textContent='✓ ¡Hecho!';}
+  const ex=State.ejerciciosDia[State.currentExIdx];
+  const last=getUltimaVez(ex.Ejercicio);
+  const isPR=State.currentReps>Number(last?.Reps||0);
+  const numSeries=Number(ex.Series_Obj||3);
+  const isLastSerie=State.currentSerie>=numSeries-1;
+  const isLastEx=State.currentExIdx>=State.ejerciciosDia.length-1;
+  await registerSerie(ex,State.currentSerie,State.currentReps);
+  const cel=document.getElementById('cel');if(!cel)return;
+  document.getElementById('cel-reps').textContent=State.currentReps;
+  const diff=State.currentReps-Number(last?.Reps||0);
+  document.getElementById('cel-vs').textContent=diff>0?`+${diff}`:diff===0?'=':diff;
+  document.getElementById('cel-ser').textContent=`${State.currentSerie+1}/${numSeries}`;
+  document.getElementById('cel-pr').style.display=isPR?'block':'none';
+  document.getElementById('cel-hero').textContent=isLastEx&&isLastSerie?'🏆':isPR?'🌟':'🔥';
+  if(isLastEx&&isLastSerie){document.getElementById('cel-title').innerHTML='¡ENTRENO<br>COMPLETADO!';document.getElementById('cel-sub').textContent='¡Lo has dado todo!';document.getElementById('cel-next').textContent='Ver resumen';document.getElementById('cel-go').textContent='VER RESUMEN →';}
+  else if(isLastSerie){const nextEx=State.ejerciciosDia[State.currentExIdx+1];document.getElementById('cel-title').innerHTML='¡EJERCICIO<br>COMPLETADO!';document.getElementById('cel-sub').textContent=`${numSeries} series ✓`;document.getElementById('cel-next').textContent=nextEx?.Ejercicio||'Siguiente';document.getElementById('cel-go').textContent='SIGUIENTE →';}
+  else{document.getElementById('cel-title').innerHTML='¡SERIE<br>HECHA!';document.getElementById('cel-sub').textContent=`Serie ${State.currentSerie+1} de ${numSeries}`;document.getElementById('cel-next').textContent=ex.Ejercicio;document.getElementById('cel-go').textContent='SIGUIENTE SERIE →';}
+  setTimeout(()=>{cel.classList.add('show');spawnConfetti();},200);
 }
 
-// ---- EJERCICIOS DEL DÍA ----
-function getEjerciciosDia() {
-  return State.plantillas
-    .filter(p => p.Programa===State.programa && Number(p.Semana)===State.semana && Number(p.Dia)===State.dia)
-    .sort((a,b) => Number(a.Orden)-Number(b.Orden));
+function nextAfterCel(){
+  const cel=document.getElementById('cel');if(cel)cel.classList.remove('show');
+  const ex=State.ejerciciosDia[State.currentExIdx];
+  const numSeries=Number(ex?.Series_Obj||3);
+  const isLastSerie=State.currentSerie>=numSeries-1;
+  const isLastEx=State.currentExIdx>=State.ejerciciosDia.length-1;
+  if(isLastEx&&isLastSerie){finishWorkout();return;}
+  if(isLastSerie){State.currentSerie=0;State.currentExIdx++;renderAndShow('prep');}
+  else{State.currentSerie++;renderAndShow('exercise');}
 }
 
-// ---- SESSION MANAGEMENT ----
-async function startSession() {
-  if (State.sesionActiva) return;
-  const exs = getEjerciciosDia();
-  const sesionID = uid();
-  const ses = {
-    SesionID: sesionID,
-    Programa: State.programa,
-    Semana: State.semana,
-    Dia: State.dia,
-    Nombre_Dia: `S${State.semana}D${State.dia} ${State.programa}`,
-    Fecha_Inicio: nowStr(),
-    Fecha_Fin: '',
-    Completada: 'No',
-    Notas: '',
-    _startTs: Date.now(),
-  };
-  State.sesionActiva = ses;
-  State.ejerciciosActivos = exs;
-  Storage.saveSession(ses);
-
-  try {
-    await Sheets.append(CONFIG.SHEETS.SESIONES, [
-      sesionID, State.programa, State.semana, State.dia,
-      ses.Nombre_Dia, ses.Fecha_Inicio, '', 'No', ''
-    ]);
-  } catch(e) { showToast('Sin conexión — guardado local', 'error'); }
-}
-
-async function finishSession() {
-  const fin = nowStr();
-  if (State.sesionActiva) {
-    State.sesionActiva.Fecha_Fin = fin;
-    State.sesionActiva.Completada = 'Sí';
+async function finishWorkout(){
+  const fin=nowStr();
+  if(State.sesionActiva){
+    State.sesionActiva.Fecha_Fin=fin;State.sesionActiva.Completada='Sí';
     State.sesiones.push({...State.sesionActiva});
-    try {
-      await Sheets.append(CONFIG.SHEETS.SESIONES, [
-        State.sesionActiva.SesionID+'_end', State.programa, State.semana, State.dia,
-        State.sesionActiva.Nombre_Dia, State.sesionActiva.Fecha_Inicio, fin, 'Sí',
-        Storage.loadNotes()
-      ]);
-    } catch(e) {}
+    try{await Sheets.append(CONFIG.SHEETS.SESIONES,[State.sesionActiva.SesionID+'_fin',State.programa,State.semana,State.dia,State.sesionActiva.Nombre_Dia,State.sesionActiva.Fecha_Inicio,fin,'Sí',Storage.loadNotes()]);}catch(e){}
   }
-  Storage.clearSession();
-  goTo('summary');
+  Storage.clearSession();renderAndShow('summary');
 }
 
-async function registerSerie(exKey, idx, data) {
-  const exs = getEjerciciosDia();
-  const ex = exs[State.currentExIdx];
-  const serieID = uid();
-  const row = {
-    EjercicioID: serieID,
-    SesionID: State.sesionActiva?.SesionID || '',
-    Orden: ex?.Orden || '',
-    Tipo: ex?.Tipo || '',
-    Grupo_Superset: ex?.Grupo_Superset || '',
-    Ejercicio: data.ejercicio || ex?.Ejercicio || '',
-    Equipo: ex?.Equipo || 'Corporal',
-    Series_Obj: ex?.Series_Obj || 3,
-    N_Serie: idx + 1,
-    Reps: data.reps || 0,
-    Peso_KB: data.kg || '',
-    Color_Banda: (data.bandas||[]).join(', '),
-    Anclaje_Banda: data.anclaje || '',
-    Elongacion_cm: data.elong || '',
-    Peso_Banda_kg: data.kgTotal || '',
-    Descanso_seg: data.descanso || '',
-    RPE: data.rpe || '',
-    RIR: data.rir || '',
-    Notas: Storage.loadNotes(),
-  };
-  State.seriesRegistradas.push(row);
-  State.ejerciciosAll.push(row);
-
-  try {
-    await Sheets.append(CONFIG.SHEETS.EJERCICIOS, Object.values(row));
-  } catch(e) { console.warn('Sin conexión, guardado local'); }
-
-  showToast('Serie ✓ guardada');
+async function registerSerie(ex,serieIdx,reps){
+  const row={EjercicioID:uid(),SesionID:State.sesionActiva?.SesionID||'',Orden:ex.Orden||'',Tipo:ex.Tipo||'Serie',Grupo_Superset:ex.Grupo_Superset||'',Ejercicio:ex.Ejercicio||'',Equipo:ex.Equipo||'Corporal',Series_Obj:ex.Series_Obj||3,N_Serie:serieIdx+1,Reps:reps,Peso_KB:'',Color_Banda:'',Anclaje_Banda:'',Elongacion_cm:'',Peso_Banda_kg:'',Descanso_seg:'',RPE:'',RIR:'',Notas:Storage.loadNotes()};
+  State.seriesRegistradas.push(row);State.ejerciciosAll.push(row);
+  try{await Sheets.append(CONFIG.SHEETS.EJERCICIOS,Object.values(row));}catch(e){console.warn('Error guardando:',e);}
   showSaved();
 }
 
-// ---- EVENT DELEGATION ----
-function attachEvents(screenId, el) {
-  el.addEventListener('click', async e => {
-    const t = e.target.closest('[data-action]');
-    if (!t) return;
-    const action = t.dataset.action;
-
-    switch(action) {
-      case 'back-home':    goBack('home'); break;
-      case 'back-weeks':   goBack('weeks'); break;
-      case 'back-days':    goBack('days'); break;
-      case 'back-calent':  goBack('calent'); break;
-      case 'nav-home':     goTo('home'); break;
-      case 'nav-weeks':
-        if (State.programa) goTo('weeks');
-        else goTo('home');
-        break;
-      case 'nav-history':  goTo('history'); break;
-
-      case 'open-prog':
-        State.programa = t.dataset.prog;
-        goTo('weeks');
-        break;
-
-      case 'start-next': {
-        const sid = t.dataset.sesid;
-        if (sid) {
-          const [prog, sem, dia] = sid.split('-');
-          State.programa = prog;
-          State.semana = Number(sem);
-          State.dia = Number(dia);
-          await startSession();
-          State.currentExIdx = 0;
-          goTo('calent');
-        }
-        break;
-      }
-
-      case 'open-week':
-        State.semana = Number(t.dataset.semana);
-        goTo('days');
-        break;
-
-      case 'open-day':
-        State.dia = Number(t.dataset.dia);
-        State.currentExIdx = 0;
-        State.seriesRegistradas = [];
-        State.sesionActiva = null;
-        await startSession();
-        goTo('calent');
-        break;
-
-      case 'toggle-calent': {
-        const btn = el.querySelector('#calent-btn');
-        const done = btn.classList.toggle('secondary');
-        btn.textContent = done ? '✓ COMPLETADO' : 'MARCAR COMO COMPLETADO ✓';
-        if (done) { showToast('Calentamiento ✓'); showSaved(); }
-        break;
-      }
-
-      case 'next-ex': {
-        const nextIdx = Number(t.dataset.idx);
-        const exs = getEjerciciosDia();
-        if (nextIdx >= exs.length) { await finishSession(); break; }
-        // Skip already-grouped exercises
-        State.currentExIdx = nextIdx;
-        goTo('exercise');
-        break;
-      }
-
-      case 'prev-ex':
-        State.currentExIdx = Math.max(0, Number(t.dataset.idx));
-        goTo('exercise');
-        break;
-
-      case 'back-calent-from-ex':
-        goBack('calent');
-        break;
-
-      case 'finish-session':
-        await finishSession();
-        break;
-
-      case 'add-serie':
-        showToast('Serie añadida ✓');
-        break;
-
-      case 'toggle-check': {
-        const key = t.dataset.key;
-        const idx = Number(t.dataset.idx);
-        const isDone = t.classList.toggle('done');
-        t.textContent = isDone ? '✓' : '○';
-        const sb = el.querySelector(`#sb-${key}-${idx}`);
-        if (sb) {
-          sb.classList.toggle('done-block', isDone);
-          const badge = sb.querySelector('.sbl-badge');
-          if (badge) {
-            badge.className = 'sbl-badge ' + (isDone?'badge-done':'badge-pending');
-            badge.textContent = isDone ? '✓ Hecho' : 'Pendiente';
-          }
-        }
-        if (isDone) {
-          const reps = el.querySelector(`#rv-${key}-${idx}`)?.textContent || '0';
-          const savedBandas = [...el.querySelectorAll(`[data-detkey="${key}-${idx}"] .bchip.sel`)].map(c=>c.dataset.banda);
-          const anclaje = el.querySelector(`[data-detkey="${key}-${idx}"]`)?.closest('.banda-detail')
-            ?.querySelector('.anc-chip.sel')?.textContent?.trim() || '';
-          const elong = el.querySelector(`#elong-${key}-${idx}`)?.textContent?.replace('cm','') || '';
-          const kgStr = calcBandaKg(savedBandas);
-
-          Storage.saveProgress(key, idx, { done:true, reps, bandas:savedBandas, anclaje, elong });
-          await registerSerie(key, idx, { ejercicio: getEjerciciosDia()[State.currentExIdx]?.Ejercicio, reps, bandas:savedBandas, anclaje, elong, kgTotal:kgStr });
-
-          // Activate next
-          const next = el.querySelector(`#sb-${key}-${idx+1}`);
-          if (next) {
-            const nb = next.querySelector('.sbl-badge');
-            if (nb) { nb.className='sbl-badge badge-active'; nb.textContent='● Actual'; }
-          }
-        } else {
-          Storage.saveProgress(key, idx, { done:false });
-        }
-        showSaved();
-        break;
-      }
-
-      case 'toggle-group-check': {
-        const key = t.dataset.key;
-        const idx = Number(t.dataset.idx);
-        const isDone = t.classList.toggle('done');
-        t.textContent = isDone ? '✓' : '○';
-        const sb = el.querySelector(`#sb-${key}-${idx}`);
-        if (sb) {
-          sb.classList.toggle('done-block', isDone);
-          const badge = sb.querySelector('.sbl-badge');
-          if (badge) {
-            badge.className = 'sbl-badge ' + (isDone?'badge-done':'badge-pending');
-            badge.textContent = isDone ? '✓ Hecho' : 'Pendiente';
-          }
-        }
-        if (isDone) {
-          Storage.saveProgress(key, idx, { done:true });
-          showToast('Serie ✓ guardada');
-        } else {
-          Storage.saveProgress(key, idx, { done:false });
-        }
-        showSaved();
-        break;
-      }
-
-      case 'reps-dec': case 'reps-inc': {
-        const key = t.dataset.key, idx = t.dataset.idx;
-        const vEl = el.querySelector(`#rv-${key}-${idx}`);
-        if (vEl) {
-          const v = Math.max(0, Number(vEl.textContent.replace(/[^0-9]/g,'')) + (action==='reps-inc'?1:-1));
-          vEl.textContent = v;
-          Storage.saveProgress(key, idx, { ...(Storage.loadProgress()[key]?.[idx]||{}), reps:v });
-          showSaved();
-        }
-        break;
-      }
-
-      case 'reps-dec-g': case 'reps-inc-g': {
-        const key=t.dataset.key, s=t.dataset.serie, ei=t.dataset.ei;
-        const vEl = el.querySelector(`#rv-${key}-${s}-${ei}`);
-        if (vEl) {
-          const v = Math.max(0, Number(vEl.textContent.replace(/[^0-9]/g,'')) + (action==='reps-inc-g'?1:-1));
-          vEl.textContent = v;
-          showSaved();
-        }
-        break;
-      }
-
-      case 'elong-dec': case 'elong-inc': {
-        const eid = t.dataset.id;
-        const vEl = el.querySelector(`#${eid}`);
-        if (vEl) {
-          const v = Math.max(0, parseInt(vEl.textContent) + (action==='elong-inc'?5:-5));
-          vEl.textContent = v + 'cm';
-          showSaved();
-        }
-        break;
-      }
-
-      case 'toggle-opt': {
-        const bodyId = t.dataset.body, iconId = t.dataset.icon;
-        const body = el.querySelector(`#${bodyId}`);
-        const icon = el.querySelector(`#${iconId}`);
-        if (body) {
-          const open = body.classList.toggle('open');
-          if (icon) { icon.textContent = open ? '∧' : '∨'; icon.classList.toggle('open', open); }
-          t.classList.toggle('open', open);
-        }
-        break;
-      }
-
-      case 'set-rpe': {
-        const v = Number(t.dataset.val);
-        const nEl = el.querySelector(`#${t.dataset.nid}`);
-        const dEl = el.querySelector(`#${t.dataset.did}`);
-        t.closest('.rpe-track').querySelectorAll('.rpe-pip').forEach((p,i) => p.classList.toggle('on', i<v));
-        if (nEl) nEl.textContent = v;
-        if (dEl) dEl.textContent = CONFIG.RPE_DESC[v];
-        break;
-      }
-
-      case 'set-rir':
-        t.closest('.rir-grid').querySelectorAll('.rir-btn').forEach(b=>b.classList.remove('sel'));
-        t.classList.add('sel');
-        break;
-
-      case 'save-notes':
-        // handled by input event
-        break;
-
-      case 'go-home':
-        State.sesionActiva = null;
-        State.seriesRegistradas = [];
-        goTo('home');
-        break;
-
-      case 'cal-prev':
-        State.calMonth--;
-        if (State.calMonth < 0) { State.calMonth=11; State.calYear--; }
-        goTo('history');
-        break;
-
-      case 'cal-next':
-        State.calMonth++;
-        if (State.calMonth > 11) { State.calMonth=0; State.calYear++; }
-        goTo('history');
-        break;
-    }
-  });
-
-  // Notes input
-  el.querySelectorAll('.notes-input').forEach(inp => {
-    inp.addEventListener('input', () => {
-      Storage.saveNotes(inp.value);
-      showSaved();
-    });
-  });
+function renderSummary(){
+  const racha=calcRacha();
+  const exNames=[...new Set(State.seriesRegistradas.map(s=>s.Ejercicio))];
+  const durMin=State.sesionActiva?Math.round((Date.now()-State.sesionActiva._startTs)/60000):0;
+  const exHtml=exNames.map(n=>{
+    const ss=State.seriesRegistradas.filter(s=>s.Ejercicio===n);
+    const isPR=ss.some(s=>Number(s.Reps)>Number(getUltimaVez(n)?.Reps||0));
+    return`<div class="sum-rec-item"><div class="sri-icon">${getEmoji(n)}</div><div class="sri-info"><div class="sri-name">${n}</div><div class="sri-detail">${ss.length} series · ${ss.map(s=>s.Reps).join('/')} reps</div></div>${isPR?'<div class="sri-pr">+1 PR</div>':''}</div>`;
+  }).join('');
+  return`${geoBg()}
+    <div class="scroll" style="position:relative;z-index:1;padding-bottom:20px">
+      <div class="sum-top"><div class="sum-eyebrow">Sesión completada · Semana ${State.semana}</div><div class="sum-title">¡LO HAS<br><em>DADO TODO!</em></div><div class="sum-sub">${State.programa} · ${durMin} minutos</div></div>
+      <div class="sum-streak"><div class="ss-num">🔥${racha}</div><div class="ss-right"><div class="ss-lbl">Racha actual</div><div class="ss-sub2">días seguidos</div></div></div>
+      <div class="sum-stats">
+        <div class="sstat"><div class="sstat-v">${exNames.length}</div><div class="sstat-l">Ejercicios</div></div>
+        <div class="sstat"><div class="sstat-v">${State.seriesRegistradas.length}</div><div class="sstat-l">Series</div></div>
+        <div class="sstat"><div class="sstat-v">${exNames.filter(n=>State.seriesRegistradas.filter(s=>s.Ejercicio===n).some(s=>Number(s.Reps)>Number(getUltimaVez(n)?.Reps||0))).length}</div><div class="sstat-l">Récords</div></div>
+      </div>
+      <div class="sum-recs"><div class="sum-rec-lbl">Tus marcas de hoy</div>${exHtml||'<div style="color:var(--t2);font-size:13px;padding:16px 0">Sin series registradas</div>'}</div>
+      <button class="sum-cta" onclick="renderAndShow('home')">VOLVER AL INICIO 🏠</button>
+    </div>
+    ${renderTabs('summary')}`;
 }
 
-// Banda chip toggle (called inline)
-function toggleBandaChip(el) {
-  el.classList.toggle('sel');
-  const inner = el.closest('.banda-detail-inner');
-  const kgId = el.dataset.kgid;
-  const chips = inner.querySelectorAll('.bchip.sel');
-  let mn=0, mx=0;
-  chips.forEach(c => {
-    mn += Number(c.dataset.min);
-    mx += Number(c.dataset.max);
-  });
-  const kgEl = document.getElementById(kgId);
-  if (kgEl) kgEl.innerHTML = mn>0
-    ? `<div class="er-kg-val">${mn}-${mx}</div><div class="er-kg-lbl">kg</div>`
-    : `<div class="er-kg-val" style="color:var(--t3)">—</div>`;
-  showSaved();
+function renderHistory(){
+  const months=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const y=State.calYear,m=State.calMonth,now=new Date();
+  const sessionDays=new Set();
+  State.sesiones.forEach(s=>{const p=(s.Fecha_Inicio||'').split(/[\/,\s]+/);if(p.length>=3){const d=new Date(p[2],p[1]-1,p[0]);if(d.getFullYear()===y&&d.getMonth()===m)sessionDays.add(d.getDate());}});
+  const firstDay=(new Date(y,m,1).getDay()+6)%7,daysInMonth=new Date(y,m+1,0).getDate();
+  const lbls=['L','M','X','J','V','S','D'].map(d=>`<div class="cal-day-lbl">${d}</div>`).join('');
+  let cells=Array(firstDay).fill('<div></div>');
+  for(let d=1;d<=daysInMonth;d++){const isToday=d===now.getDate()&&m===now.getMonth()&&y===now.getFullYear();const hasSes=sessionDays.has(d);cells.push(`<div class="cal-day ${isToday?'today':''} ${hasSes?'has-session':''}">${d}${hasSes?'<div class="cal-dot"></div>':''}</div>`);}
+  const recentHtml=[...State.sesiones].reverse().slice(0,12).map(s=>{const p=(s.Fecha_Inicio||'').split(/[\/,\s]+/);const day=p[0]||'?',mon=months[Number(p[1])-1]?.slice(0,3).toUpperCase()||'';return`<div class="ses-item"><div class="ses-date"><div class="ses-day">${day}</div><div class="ses-mon">${mon}</div></div><div class="ses-info"><div class="ses-name">${s.Nombre_Dia||'Sesión'}</div><div class="ses-meta">${s.Programa} · Semana ${s.Semana}</div></div></div>`;}).join('')||'<div class="empty"><div class="empty-ico">📅</div><div class="empty-ttl">Sin sesiones</div><div class="empty-sub">Completa tu primera sesión para ver el historial</div></div>';
+  return`${geoBg()}
+    <div class="topbar"><div class="topbar-title">HISTORIAL</div></div>
+    <div class="scroll" style="position:relative;z-index:1;padding-bottom:20px">
+      <div class="cal-header">
+        <button class="cal-nav-btn" onclick="State.calMonth--;if(State.calMonth<0){State.calMonth=11;State.calYear--;}renderAndShow('history')">‹</button>
+        <div class="cal-month">${months[m]} ${y}</div>
+        <button class="cal-nav-btn" onclick="State.calMonth++;if(State.calMonth>11){State.calMonth=0;State.calYear++;}renderAndShow('history')">›</button>
+      </div>
+      <div class="cal-grid">${lbls}${cells.join('')}</div>
+      <div class="recent-lbl">Sesiones recientes</div>${recentHtml}
+    </div>
+    ${renderTabs('history')}`;
 }
 
-function selAnclaje(el) {
-  el.closest('.anc-mini').querySelectorAll('.anc-chip').forEach(c=>c.classList.remove('sel'));
-  el.classList.add('sel');
-  showSaved();
+function renderTabs(active){
+  const tabs=[{id:'home',ico:'🏠',lbl:'Inicio',fn:"renderAndShow('home')"},{id:'entrena',ico:'⚡',lbl:'Entrena',fn:"renderAndShow('weeks')"},{id:'history',ico:'📅',lbl:'Historial',fn:"renderAndShow('history')"}];
+  const activeId=active==='weeks'||active==='days'||active==='overview'||active==='prep'||active==='exercise'||active==='summary'?'entrena':active;
+  return`<div class="tabs">${tabs.map(t=>`<div class="tab ${t.id===activeId?'on':''}" onclick="${t.fn}"><div class="tab-ico">${t.ico}</div><div class="tab-lbl">${t.lbl}</div></div>`).join('')}</div>`;
 }
 
-// ---- RESTORE NOTES ----
-function restoreNotes(el) {
-  const notes = Storage.loadNotes();
-  if (notes) el.querySelectorAll('.notes-input').forEach(inp => inp.value = notes);
+function openPause(){document.getElementById('pause-ov').classList.add('show');}
+function resumePause(){document.getElementById('pause-ov').classList.remove('show');}
+
+function spawnConfetti(){
+  const c=document.getElementById('confetti');if(!c)return;c.innerHTML='';
+  const cols=['#F5C800','#FF3A5C','#fff','#FF9500','#34C759','#00CFFF'];
+  for(let i=0;i<55;i++){const p=document.createElement('div');p.className='particle';const sz=6+Math.random()*9;p.style.cssText=`left:${Math.random()*100}%;top:0;width:${sz}px;height:${sz}px;background:${cols[Math.floor(Math.random()*cols.length)]};border-radius:${Math.random()>.5?'50%':'3px'};animation-delay:${Math.random()*.5}s;animation-duration:${1.2+Math.random()*.8}s`;c.appendChild(p);}
 }
 
-// ---- CLOCK ----
-function updateClock(el) {
-  const clk = el.querySelector('#clk');
-  if (!clk) return;
-  clk.textContent = getTime();
-  setInterval(() => { if (clk.isConnected) clk.textContent = getTime(); }, 30000);
+async function init(){
+  try{
+    const[plantRows,sesRows,exRows]=await Promise.allSettled([Sheets.get(`${CONFIG.SHEETS.PLANTILLAS}!A:K`),Sheets.get(`${CONFIG.SHEETS.SESIONES}!A:I`),Sheets.get(`${CONFIG.SHEETS.EJERCICIOS}!A:T`)]);
+    if(plantRows.status==='fulfilled')State.plantillas=Sheets.rowsToObjects(plantRows.value);
+    if(sesRows.status==='fulfilled')State.sesiones=Sheets.rowsToObjects(sesRows.value);
+    if(exRows.status==='fulfilled')State.ejerciciosAll=Sheets.rowsToObjects(exRows.value);
+    if(!State.plantillas.length)showToast('Sin datos — comprueba la API Key','err');
+  }catch(e){console.error('Error:',e);showToast('Error de conexión','err');}
+  const progs=[...new Set(State.plantillas.map(p=>p.Programa))];
+  if(progs.length)State.programa=progs[0];
+  const savedSes=Storage.loadSession();
+  if(savedSes){State.sesionActiva=savedSes;State.programa=savedSes.Programa;State.semana=Number(savedSes.Semana);State.dia=Number(savedSes.Dia);}
+  renderAndShow('home');
 }
 
-// ---- INIT ----
-async function init() {
-  const app = document.getElementById('app');
-  app.innerHTML = `
-    <div class="screen active" style="align-items:center;justify-content:center;gap:16px">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:52px;letter-spacing:.06em;color:var(--accent)">MOMENTUM</div>
-      <div class="spinner"></div>
-      <div class="loading-text">Cargando programa...</div>
-    </div>`;
-
-  try {
-    const [plantRows, sesRows, exRows] = await Promise.all([
-      Sheets.get(`${CONFIG.SHEETS.PLANTILLAS}!A:K`),
-      Sheets.get(`${CONFIG.SHEETS.SESIONES}!A:I`),
-      Sheets.get(`${CONFIG.SHEETS.EJERCICIOS}!A:T`),
-    ]);
-    State.plantillas = Sheets.rowsToObjects(plantRows);
-    State.sesiones   = Sheets.rowsToObjects(sesRows);
-    State.ejerciciosAll = Sheets.rowsToObjects(exRows);
-  } catch(err) {
-    console.error('Error cargando datos:', err);
-    showToast('Error al cargar. Comprueba la API Key.', 'error');
-  }
-
-  // Restore active session if exists
-  const savedSes = Storage.loadSession();
-  if (savedSes) {
-    State.sesionActiva = savedSes;
-    State.programa = savedSes.Programa;
-    State.semana = Number(savedSes.Semana);
-    State.dia = Number(savedSes.Dia);
-    State.ejerciciosActivos = getEjerciciosDia();
-  }
-
-  app.innerHTML = '';
-  renderScreen('home');
-}
-
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded',init);
