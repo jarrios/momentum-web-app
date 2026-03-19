@@ -151,13 +151,19 @@ function renderHome(){
   const exsDia=nextInfo?State.plantillas.filter(p=>p.Programa===nextInfo.prog&&Number(p.Semana)===nextInfo.semana&&Number(p.Dia)===nextInfo.dia):[];
   const exCount=exsDia.filter(e=>e.Tipo!=='Calentamiento').length;
   const mats=getMaterialDia(exsDia);
+  // Si no hay siguiente, sugerir el día 1 semana 1 igualmente (modo libre)
+  if(!nextInfo && State.programa) {
+    const prog=State.programa;
+    const sems=getSemanasPrograma(prog);
+    if(sems.length) nextInfo={semana:sems[0],dia:1,prog};
+  }
   const heroContent=nextInfo
-    ?`<div class="hero-lbl">Sesión de hoy · Semana ${nextInfo.semana}</div>
+    ?`<div class="hero-lbl">Sesión recomendada · Semana ${nextInfo.semana}</div>
       <div class="hero-name">${nextInfo.prog.toUpperCase()}<br>S${nextInfo.semana}D${nextInfo.dia}</div>
       <div class="hero-pills"><div class="hero-pill">⚡ ${exCount} ejercicios</div><div class="hero-pill">⏱ ~45 min</div>${mats.map(m=>`<div class="hero-pill">${m.emoji||''} ${m.label}</div>`).join('')}</div>
       <div class="hero-rival">La última vez: <strong>${calcTotalUltima(nextInfo.prog,nextInfo.semana,nextInfo.dia)} reps</strong></div>
       <button class="hero-btn" onclick="openOverview('${nextInfo.prog}',${nextInfo.semana},${nextInfo.dia})">⚡ EMPEZAR HOY</button>`
-    :`<div class="hero-name">¡PROGRAMA<br>COMPLETADO!</div><div class="hero-rival">Lo has dado todo 🏆</div>`;
+    :`<div class="hero-name">SIN<br>PROGRAMA</div><div class="hero-rival">Comprueba la conexión con Sheets</div>`;
 
   return`${geoBg()}
     <div class="home-scroll" style="position:relative;z-index:1">
@@ -217,7 +223,7 @@ function renderDays(){
     const exNoCal=exs.filter(e=>e.Tipo!=='Calentamiento');
     const ssG=[...new Set(exs.filter(e=>e.Tipo==='Superset').map(e=>e.Grupo_Superset))];
     const mats=getMaterialDia(exs);
-    return`<div class="day-card ${isDone?'completed':''} ${isNext?'next-up':''}" onclick="${isDone?'':(`openOverview('${prog}',${sem},${d})`)}">
+    return`<div class="day-card ${isDone?'completed':''} ${isNext?'next-up':''}" onclick="openOverview('${prog}',${sem},${d})">
       ${isNext?'<div class="day-next-badge">SIGUIENTE</div>':''}
       <div class="day-card-num">Sesión ${d}</div>
       <div class="day-card-name">${prog.toUpperCase()} S${sem}D${d}</div>
@@ -273,8 +279,7 @@ async function startWorkout(){
   const sesionID=uid();
   const ses={SesionID:sesionID,Programa:State.programa,Semana:State.semana,Dia:State.dia,Nombre_Dia:`S${State.semana}D${State.dia} ${State.programa}`,Fecha_Inicio:nowStr(),Fecha_Fin:'',Completada:'No',Notas:'',_startTs:Date.now()};
   State.sesionActiva=ses;Storage.saveSession(ses);
-  try{await Sheets.append(CONFIG.SHEETS.SESIONES,[sesionID,State.programa,State.semana,State.dia,ses.Nombre_Dia,ses.Fecha_Inicio,'','No','']);}
-  catch(e){showToast('Sin conexión — guardado local','err');}
+  // No grabamos inicio — solo grabamos al terminar para tener una sola fila
   renderAndShow('prep');
 }
 
@@ -307,6 +312,7 @@ function renderPrep(){
       <div class="prep-eyebrow">${typeLabel} · Ejercicio ${idx+1} de ${exs.length}</div>
       <div class="prep-name">${ex.Ejercicio}</div>
       <div class="prep-hero">${getEmoji(ex.Ejercicio)}</div>
+      <button class="prep-go" onclick="stopCd();renderAndShow('exercise')">YA ESTOY LISTO →</button>
       <div class="prep-mat-box"><div class="prep-mat-lbl">🎒 Prepara tu material</div><div class="prep-rows">${matHtml}</div></div>
       <div class="prep-cd">
         <div class="cd-ring">
@@ -315,7 +321,6 @@ function renderPrep(){
         </div>
         <div class="cd-info"><strong id="cd-ex">${ex.Ejercicio}</strong>empieza en unos segundos</div>
       </div>
-      <button class="prep-go" onclick="stopCd();renderAndShow('exercise')">YA ESTOY LISTO →</button>
     </div>`;
 }
 
@@ -389,6 +394,7 @@ function renderExercise(){
           ${bandaHtml}
         </div>
         <div>
+          <button class="done-btn" id="done-btn" onclick="doneSerie()">✓ &nbsp; SERIE COMPLETADA</button>
           <div class="rival-card">
             <div class="riv-side"><div class="riv-vs">Última vez</div><div class="riv-n last">${last?last.Reps:'—'}</div><div class="riv-lbl">${last?'reps anteriores':'primera vez'}</div></div>
             <div class="riv-arr">→</div><div class="riv-sep"></div>
@@ -399,7 +405,6 @@ function renderExercise(){
             <div class="cnt-center"><div class="cnt-num" id="cnt-num">${goalReps}</div><div class="cnt-unit">repeticiones</div></div>
             <div class="cnt-btn" onclick="chReps(1)">+</div>
           </div>
-          <button class="done-btn" id="done-btn" onclick="doneSerie()">✓ &nbsp; SERIE COMPLETADA</button>
         </div>
       </div>
     </div>`;
@@ -422,7 +427,9 @@ function nextExercise(){
 
 async function doneSerie(){
   const btn=document.getElementById('done-btn');
-  if(btn){btn.classList.add('done');btn.textContent='✓ ¡Hecho!';}
+  if(!btn||btn.classList.contains('done'))return; // evitar doble llamada
+  btn.classList.add('done');btn.textContent='✓ ¡Hecho!';
+  btn.onclick=null; // desactivar el botón inmediatamente
   const ex=State.ejerciciosDia[State.currentExIdx];
   const last=getUltimaVez(ex.Ejercicio);
   const isPR=State.currentReps>Number(last?.Reps||0);
