@@ -177,7 +177,7 @@ html,body{height:100%;overflow:hidden;font-family:'Outfit',sans-serif;color:#fff
 .ex-hero{height:195px;position:relative;flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:95px}
 .ex-hero img{width:100%;height:100%;object-fit:cover}
 .ex-hero-overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(13,59,142,0.5) 0%,transparent 35%,transparent 50%,rgba(13,59,142,0.92) 82%,var(--blue3) 100%)}
-.ex-topbar{position:absolute;top:max(42px,env(safe-area-inset-top));left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:0 18px;z-index:2}
+.ex-topbar{position:absolute;top:max(42px,env(safe-area-inset-top));left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:0 18px;z-index:2;gap:8px}
 .ex-back-btn{width:38px;height:38px;border-radius:50%;background:rgba(0,0,0,0.3);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;color:#fff}
 .ex-prog{background:rgba(0,0,0,0.3);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.18);padding:6px 12px;border-radius:20px;display:flex;align-items:center;gap:7px}
 .ep-num{font-size:12px;font-weight:600;color:var(--t2)}
@@ -334,3 +334,19 @@ html,body{height:100%;overflow:hidden;font-family:'Outfit',sans-serif;color:#fff
 .empty-ico{font-size:44px}
 .empty-ttl{font-size:17px;font-weight:700}
 .empty-sub{font-size:13px;color:var(--t2);line-height:1.5}
+
+.ex-finish-btn{
+  background:rgba(255,58,92,0.2);
+  border:1px solid rgba(255,58,92,0.4);
+  color:#FF3A5C;
+  padding:7px 13px;
+  border-radius:20px;
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  cursor:pointer;
+  backdrop-filter:blur(8px);
+  white-space:nowrap;
+}
+.ex-finish-btn:active{background:rgba(255,58,92,0.3);}
