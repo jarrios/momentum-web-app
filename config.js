@@ -5,7 +5,7 @@
 const CONFIG = {
   // Google Sheets
   SHEET_ID: '1Riz_9M7BZzKc-S78xLrVG98uMzSIhn95Dvrjq85W_A8',
-  API_KEY: 'AKfycbzQIPBHDbVnB32FL85pjYWbvpUwUhHKY8yY1GNh8IxP0L41O8lkVlz0jNx-v14ltMPduw',           // <-- pega tu API Key aquí
+  API_KEY: 'AIzaSyBw-miFZGOgguWeLQpWlPa3XtFnOjnD1oA',           // <-- pega tu API Key aquí
   APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyvW8TrMgECvI0denHty_zgmNa4YDLJEhKkIycXXDOmGipTNB8ihDjgDiwmrjm-oBIX-A/exec', // <-- pega la URL de Apps Script aquí
 
   SHEETS: {
