@@ -280,6 +280,7 @@ async function startWorkout(){
   const ses={SesionID:sesionID,Programa:State.programa,Semana:State.semana,Dia:State.dia,Nombre_Dia:`S${State.semana}D${State.dia} ${State.programa}`,Fecha_Inicio:nowStr(),Fecha_Fin:'',Completada:'No',Notas:'',_startTs:Date.now()};
   State.sesionActiva=ses;Storage.saveSession(ses);
   // No grabamos inicio — solo grabamos al terminar para tener una sola fila
+  history.pushState(null,'',location.href); // para interceptar botón atrás
   renderAndShow('prep');
 }
 
@@ -361,7 +362,7 @@ function renderExercise(){
     return`${geoBg()}
       <div class="ex-screen">
         <div class="ex-hero" style="background:linear-gradient(135deg,#2d0a4a,#4a1a7a)"><div style="font-size:100px;position:relative;z-index:1">🔥</div><div class="ex-hero-overlay"></div>
-          <div class="ex-topbar"><div class="ex-back-btn" onclick="renderAndShow('overview')">←</div><div class="ex-prog"><span class="ep-num">1/${exs.length}</span><span class="ep-tag calent">Calent.</span></div></div>
+          <div class="ex-topbar"><div class="ex-back-btn" onclick="confirmExit()">←</div><div class="ex-prog"><span class="ep-num">1/${exs.length}</span><span class="ep-tag calent">Calent.</span></div><div class="ex-finish-btn" onclick="confirmFinish()">Finalizar</div></div>
         </div>
         <div class="calent-hero">
           <div class="calent-emoji">🔥</div>
@@ -381,8 +382,9 @@ function renderExercise(){
         <div style="font-size:110px;position:relative;z-index:1">${getEmoji(ex.Ejercicio)}</div>
         <div class="ex-hero-overlay"></div>
         <div class="ex-topbar">
-          <div class="ex-back-btn" onclick="renderAndShow('overview')">←</div>
+          <div class="ex-back-btn" onclick="confirmExit()">←</div>
           <div class="ex-prog"><span class="ep-num">${idx+1}/${exs.length}</span><span class="ep-tag ${tagClass}">${tagLabel}</span></div>
+          <div class="ex-finish-btn" onclick="confirmFinish()">Finalizar</div>
         </div>
       </div>
       <div class="s-dots">${dotsHtml}</div>
@@ -412,8 +414,11 @@ function renderExercise(){
 
 function chReps(d){State.currentReps=Math.max(0,State.currentReps+d);const el=document.getElementById('cnt-num');if(el)el.textContent=State.currentReps;}
 
-function doneCalent(btn){
+async function doneCalent(btn){
   btn.classList.add('done');btn.textContent='✓ COMPLETADO';
+  btn.onclick=null;
+  const ex=State.ejerciciosDia[State.currentExIdx];
+  await registerSerie(ex,0,0); // registra calentamiento con 0 reps
   showToast('Calentamiento completado ✓');showSaved();
   setTimeout(()=>nextExercise(),800);
 }
@@ -541,6 +546,32 @@ function spawnConfetti(){
   for(let i=0;i<55;i++){const p=document.createElement('div');p.className='particle';const sz=6+Math.random()*9;p.style.cssText=`left:${Math.random()*100}%;top:0;width:${sz}px;height:${sz}px;background:${cols[Math.floor(Math.random()*cols.length)]};border-radius:${Math.random()>.5?'50%':'3px'};animation-delay:${Math.random()*.5}s;animation-duration:${1.2+Math.random()*.8}s`;c.appendChild(p);}
 }
 
+
+// ---- CONFIRMAR SALIDA ----
+function confirmExit(){
+  if(!State.sesionActiva){renderAndShow('overview');return;}
+  if(confirm('¿Salir del entrenamiento?\n\nTu progreso se guardará y podrás continuar después.')){
+    Storage.saveSession(State.sesionActiva);
+    Storage.save('momentum_ex_idx', State.currentExIdx);
+    Storage.save('momentum_serie', State.currentSerie);
+    renderAndShow('home');
+  }
+}
+
+function confirmFinish(){
+  if(confirm('¿Finalizar la sesión ahora?\n\nSe guardarán las series completadas hasta este momento.')){
+    finishWorkout();
+  }
+}
+
+// ---- INTERCEPTAR BOTÓN ATRÁS DEL MÓVIL ----
+window.addEventListener('popstate', function(e){
+  if(State.sesionActiva){
+    history.pushState(null,'',location.href);
+    confirmExit();
+  }
+});
+// Añadir estado al historial cuando empieza sesión
 async function init(){
   try{
     const[plantRows,sesRows,exRows]=await Promise.allSettled([Sheets.get(`${CONFIG.SHEETS.PLANTILLAS}!A:K`),Sheets.get(`${CONFIG.SHEETS.SESIONES}!A:I`),Sheets.get(`${CONFIG.SHEETS.EJERCICIOS}!A:T`)]);
@@ -552,7 +583,19 @@ async function init(){
   const progs=[...new Set(State.plantillas.map(p=>p.Programa))];
   if(progs.length)State.programa=progs[0];
   const savedSes=Storage.loadSession();
-  if(savedSes){State.sesionActiva=savedSes;State.programa=savedSes.Programa;State.semana=Number(savedSes.Semana);State.dia=Number(savedSes.Dia);}
+  if(savedSes){
+    State.sesionActiva=savedSes;
+    State.programa=savedSes.Programa;
+    State.semana=Number(savedSes.Semana);
+    State.dia=Number(savedSes.Dia);
+    State.ejerciciosDia=getEjerciciosDia();
+    const savedIdx=Storage.load('momentum_ex_idx');
+    const savedSerie=Storage.load('momentum_serie');
+    if(savedIdx!==null) State.currentExIdx=Number(savedIdx);
+    if(savedSerie!==null) State.currentSerie=Number(savedSerie);
+    // Mostrar banner de sesión en curso en home
+    setTimeout(()=>showToast('Tienes una sesión en curso 💪'),500);
+  }
   renderAndShow('home');
 }
 
