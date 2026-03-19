@@ -7,18 +7,47 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Momentum">
-  <meta name="theme-color" content="#0d0d0d">
+  <meta name="theme-color" content="#1A73E8">
   <title>Momentum Training</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="icon" href="icon-192.png">
-  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="icon" href="images/icon-192.png">
+  <link rel="apple-touch-icon" href="images/icon-192.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app">
+    <div class="screen active" style="align-items:center;justify-content:center">
+      <div class="loading">
+        <div style="font-family:'Syne',sans-serif;font-size:48px;font-weight:800;color:var(--yellow);letter-spacing:-.02em">MOMENTUM</div>
+        <div class="spinner"></div>
+        <div class="load-txt">Cargando programa...</div>
+      </div>
+    </div>
+  </div>
   <div id="toast" class="toast"></div>
   <div id="saved-badge" class="saved-badge">✓ GUARDADO</div>
-
+  <div id="pause-ov">
+    <div class="pause-emoji">⏸</div>
+    <div class="pause-title">PAUSA</div>
+    <div class="pause-sub">Tómate el tiempo que necesites.<br>El entrenamiento te espera.</div>
+    <button class="pause-resume" onclick="resumePause()">▶ CONTINUAR</button>
+  </div>
+  <div id="cel">
+    <div class="cel-confetti" id="confetti"></div>
+    <div class="cel-hero-img" id="cel-hero">🏆</div>
+    <div class="cel-title" id="cel-title">¡SERIE<br>HECHA!</div>
+    <div class="cel-sub" id="cel-sub">Serie 1 de 3</div>
+    <div class="cel-pr" id="cel-pr">🏆 ¡Nuevo récord personal!</div>
+    <div class="cel-stats">
+      <div><div class="cstat-v" id="cel-reps">12</div><div class="cstat-l">Reps</div></div>
+      <div><div class="cstat-v" id="cel-vs">+1</div><div class="cstat-l">vs último</div></div>
+      <div><div class="cstat-v" id="cel-ser">1/3</div><div class="cstat-l">Series</div></div>
+    </div>
+    <div class="cel-next-lbl">A continuación:</div>
+    <div class="cel-next-name" id="cel-next">Siguiente</div>
+    <button class="cel-go" id="cel-go" onclick="nextAfterCel()">SIGUIENTE →</button>
+    <button class="cel-pause-btn" onclick="openPause()">⏸ PAUSAR UN MOMENTO</button>
+  </div>
   <script src="config.js"></script>
   <script src="storage.js"></script>
   <script src="sheets.js"></script>
